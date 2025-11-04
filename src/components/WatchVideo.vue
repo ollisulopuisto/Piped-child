@@ -20,35 +20,44 @@
         <div class="flex gap-5">
             <div class="flex-auto">
                 <div v-show="!video.error">
-                    <Teleport defer to="#theaterModeSpot" :disabled="!theaterMode">
-                        <div class="flex flex-row">
-                            <keep-alive>
-                                <VideoPlayer
-                                    ref="videoPlayer"
-                                    :video="video"
-                                    :sponsors="sponsors"
-                                    :selected-auto-play="selectedAutoPlay"
-                                    :selected-auto-loop="selectedAutoLoop"
-                                    @timeupdate="onTimeUpdate"
-                                    @ended="onVideoEnded"
-                                    @navigate-next="navigateNext"
-                                />
-                            </keep-alive>
-                            <button
-                                v-if="!isMobile"
-                                :class="theaterMode ? '-ml-5' : '-mr-5'"
-                                class="z-10"
-                                @click="
-                                    theaterMode = !theaterMode;
-                                    setPreference('theaterMode', theaterMode);
-                                "
-                            >
-                                <div
-                                    :class="theaterMode ? 'i-fa6-solid:chevron-left' : 'i-fa6-solid:chevron-right'"
-                                ></div>
-                            </button>
+                    <div v-if="isParent() || isApproved">
+                        <Teleport defer to="#theaterModeSpot" :disabled="!theaterMode">
+                            <div class="flex flex-row">
+                                <keep-alive>
+                                    <VideoPlayer
+                                        ref="videoPlayer"
+                                        :video="video"
+                                        :sponsors="sponsors"
+                                        :selected-auto-play="selectedAutoPlay"
+                                        :selected-auto-loop="selectedAutoLoop"
+                                        @timeupdate="onTimeUpdate"
+                                        @ended="onVideoEnded"
+                                        @navigate-next="navigateNext"
+                                    />
+                                </keep-alive>
+                                <button
+                                    v-if="!isMobile"
+                                    :class="theaterMode ? '-ml-5' : '-mr-5'"
+                                    class="z-10"
+                                    @click="
+                                        theaterMode = !theaterMode;
+                                        setPreference('theaterMode', theaterMode);
+                                    "
+                                >
+                                    <div
+                                        :class="theaterMode ? 'i-fa6-solid:chevron-left' : 'i-fa6-solid:chevron-right'"
+                                    ></div>
+                                </button>
+                            </div>
+                        </Teleport>
+                    </div>
+                    <div v-else>
+                        <div class="h-full flex flex-col items-center justify-center">
+                            <h2 class="mb-4 text-2xl font-bold">This video requires approval</h2>
+                            <button v-if="!isPending" class="btn" @click="requestApproval">Request Approval</button>
+                            <p v-else>Your request has been submitted.</p>
                         </div>
-                    </Teleport>
+                    </div>
                     <div v-if="video && isMobile">
                         <ChaptersBar
                             v-if="video?.chapters?.length > 0 && showChapters"
@@ -360,6 +369,7 @@ import LoadingIndicatorPage from "./LoadingIndicatorPage.vue";
 import ToastComponent from "./ToastComponent.vue";
 import { parseTimeParam } from "@/utils/Misc";
 import { purifyHTML, rewriteDescription } from "@/utils/HtmlUtils";
+import { getAuthenticatedUser, isParent } from "@/utils/auth";
 
 export default {
     name: "App",
@@ -404,6 +414,9 @@ export default {
             timeoutCounter: null,
             counter: 0,
             theaterMode: false,
+            isApproved: false,
+            isPending: false,
+            userRole: getAuthenticatedUser().role,
         };
     },
     computed: {
@@ -484,6 +497,7 @@ export default {
         window.addEventListener("resize", () => {
             this.smallView = this.smallViewQuery.matches;
         });
+        this.checkApproval();
     },
     activated() {
         this.active = true;
@@ -513,6 +527,24 @@ export default {
         this.dismiss();
     },
     methods: {
+        isParent,
+        checkApproval() {
+            const videoId = this.getVideoId();
+            const approvedVideos = JSON.parse(localStorage.getItem("approved_videos")) || [];
+            this.isApproved = approvedVideos.includes(videoId);
+
+            const pendingVideos = JSON.parse(localStorage.getItem("pending_videos")) || [];
+            this.isPending = pendingVideos.includes(videoId);
+        },
+        requestApproval() {
+            const videoId = this.getVideoId();
+            const pendingVideos = JSON.parse(localStorage.getItem("pending_videos")) || [];
+            if (!pendingVideos.includes(videoId)) {
+                pendingVideos.push(videoId);
+                localStorage.setItem("pending_videos", JSON.stringify(pendingVideos));
+            }
+            this.isPending = true;
+        },
         fetchVideo() {
             return this.fetchJson(this.apiUrl() + "/streams/" + this.getVideoId());
         },
@@ -558,12 +590,29 @@ export default {
             this.setPreference("autoplay", this.selectedAutoPlay, true);
         },
         async getVideoData() {
-            await this.fetchVideo()
-                .then(data => {
-                    this.video = data;
-                    this.video.id = this.getVideoId();
-                })
-                .then(() => {
+            const data = await this.fetchVideo();
+            this.video = data;
+            this.video.id = this.getVideoId();
+
+            if (!this.video.error) {
+                document.title = this.video.title + " - Piped";
+                this.channelId = this.video.uploaderUrl.split("/")[2];
+                if (!this.isEmbed) this.fetchSubscribedStatus();
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(this.video.description, "text/html");
+                xmlDoc.querySelectorAll("a").forEach(elem => {
+                    if (!elem.innerText.match(/(?:[\d]{1,2}:)?(?:[\d]{1,2}):(?:[\d]{1,2})/))
+                        elem.outerHTML = elem.getAttribute("href");
+                });
+                xmlDoc.querySelectorAll("br").forEach(elem => (elem.outerHTML = "\n"));
+                this.video.description = rewriteDescription(xmlDoc.querySelector("body").innerHTML);
+                this.updateWatched(this.video.relatedStreams);
+
+                this.fetchDeArrowContent(this.video.relatedStreams);
+            }
+        },
+        async oldGetVideoData() {
                     if (!this.video.error) {
                         document.title = this.video.title + " - Piped";
                         this.channelId = this.video.uploaderUrl.split("/")[2];

@@ -59,6 +59,9 @@
             <li v-if="!shouldShowTrending">
                 <router-link v-t="'titles.feed'" to="/feed" class="nav-link" />
             </li>
+            <li v-if="isParent()">
+                <router-link to="/approval-queue" class="nav-link">Approval Queue</router-link>
+            </li>
         </ul>
     </nav>
     <!-- navigation bar for mobile devices -->
@@ -94,6 +97,10 @@
             <div class="i-fa6-solid:play"></div>
             <i18n-t keypath="titles.feed"></i18n-t>
         </router-link>
+        <router-link v-if="isParent()" to="/approval-queue">
+            <div class="i-fa6-solid:check-to-slot"></div>
+            <span>Approval Queue</span>
+        </router-link>
     </div>
     <!-- search suggestions for mobile devices -->
     <div class="search-container mb-2 w-full md:hidden">
@@ -122,6 +129,8 @@
 <script>
 import SearchSuggestions from "./SearchSuggestions.vue";
 import hotkeys from "hotkeys-js";
+import { isParent } from "@/utils/auth";
+
 export default {
     components: {
         SearchSuggestions,
@@ -164,6 +173,7 @@ export default {
         this.homePagePath = this.getHomePage(this);
     },
     methods: {
+        isParent,
         updateSearchTextFromURLSearchParams() {
             const query = new URLSearchParams(window.location.search).get("search_query");
             if (query) this.onSearchTextChange(query);

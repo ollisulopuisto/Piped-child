@@ -96,6 +96,12 @@ const routes = [
         name: "Page Not Found",
         component: () => import("../components/PageNotFound.vue"),
     },
+    {
+        path: "/approval-queue",
+        name: "ApprovalQueue",
+        component: () => import("../components/ApprovalQueue.vue"),
+        meta: { requiresParent: true },
+    },
 ];
 
 const router = createRouter({
@@ -104,6 +110,20 @@ const router = createRouter({
     scrollBehavior: function (_to, _from, savedPosition) {
         return savedPosition ? savedPosition : window.scrollTo(0, 0);
     },
+});
+
+import { isParent } from "@/utils/auth";
+
+router.beforeEach((to, from, next) => {
+    if (to.matched.some(record => record.meta.requiresParent)) {
+        if (!isParent()) {
+            next({ name: "Home" });
+        } else {
+            next();
+        }
+    } else {
+        next();
+    }
 });
 
 export default router;
