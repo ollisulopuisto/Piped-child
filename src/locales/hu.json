@@ -168,7 +168,12 @@
         "export": "Exportálás",
         "playlists_only": "Csak lejátszási listák",
         "always": "Mindig",
-        "never": "Soha"
+        "never": "Soha",
+        "clear": "Törlés",
+        "show_password": "Jelszó megjelenítése",
+        "hide_password": "Jelszó elrejtése",
+        "rss_feed": "RSS-hírfolyam",
+        "playlist_rss_feed": "Lejátszási lista RSS-hírfolyama"
     },
     "video": {
         "ratings_disabled": "Értékelések letiltva",
