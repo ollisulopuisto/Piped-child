@@ -172,7 +172,12 @@
         "always": "Всегда",
         "never": "Никогда",
         "mark_as_watched": "Пометить как просмотренное",
-        "mark_as_unwatched": "Пометить как непросмотренное"
+        "mark_as_unwatched": "Пометить как непросмотренное",
+        "show_password": "Показать пароль",
+        "hide_password": "Скрыть пароль",
+        "clear": "Очистить",
+        "rss_feed": "RSS feed",
+        "playlist_rss_feed": "Playlist RSS feed"
     },
     "comment": {
         "pinned_by": "Закреплено пользователем {author}",
