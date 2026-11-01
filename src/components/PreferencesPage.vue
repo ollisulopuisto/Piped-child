@@ -413,7 +413,12 @@
                 <td v-text="`${instance.up_to_date ? '&#9989;' : '&#10060;'}`" />
                 <td v-text="`${Number.parseFloat(instance.uptime_30d.toFixed(2))}%`" />
                 <td>
-                    <a v-t="'actions.view_ssl_score'" :href="sslScore(instance.api_url)" target="_blank" />
+                    <a
+                        v-t="'actions.view_ssl_score'"
+                        :href="sslScore(instance.api_url)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    />
                 </td>
             </tr>
         </tbody>
