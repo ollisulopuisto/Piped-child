@@ -4,28 +4,47 @@
             aria-label="GitHub"
             href="https://github.com/TeamPiped/Piped"
             target="_blank"
+            rel="noopener noreferrer"
             class="inline-flex items-center justify-center"
         >
             <i-fa6-brands-github />
             <span v-t="'actions.source_code'" class="ml-2 hover:underline" />
         </a>
-        <a href="https://docs.piped.video/" target="_blank" class="inline-flex items-center justify-center">
+        <a
+            href="https://docs.piped.video/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center justify-center"
+        >
             <i-fa6-solid-book />
             <span v-t="'actions.documentation'" class="ml-2 hover:underline" />
         </a>
         <a
             href="https://github.com/TeamPiped/Piped#donations"
             target="_blank"
+            rel="noopener noreferrer"
             class="inline-flex items-center justify-center"
         >
             <i-fa6-brands-bitcoin />
             <span v-t="'actions.donations'" class="ml-2 hover:underline" />
         </a>
-        <a v-if="statusPageHref" :href="statusPageHref" class="inline-flex items-center justify-center">
+        <a
+            v-if="statusPageHref"
+            :href="statusPageHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center justify-center"
+        >
             <i-fa6-solid-server />
             <span v-t="'actions.status_page'" class="ml-2 hover:underline" />
         </a>
-        <a v-if="donationHref" :href="donationHref" class="inline-flex items-center justify-center">
+        <a
+            v-if="donationHref"
+            :href="donationHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center justify-center"
+        >
             <i-fa6-solid-money-check />
             <span v-t="'actions.instance_donations'" class="ml-2 hover:underline" />
         </a>
@@ -33,6 +52,7 @@
             v-if="privacyPolicyHref"
             :href="privacyPolicyHref"
             target="_blank"
+            rel="noopener noreferrer"
             class="inline-flex items-center justify-center"
         >
             <i-fa6-solid-eye />

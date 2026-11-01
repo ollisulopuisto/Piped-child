@@ -24,7 +24,7 @@
             />
         </div>
         <hr />
-        <a :href="generatedLink" target="_blank">
+        <a :href="generatedLink" target="_blank" rel="noopener noreferrer">
             <h3 class="mt-4" v-text="generatedLink" />
         </a>
         <QrCode v-if="showQrCode" :text="generatedLink" />
@@ -101,7 +101,7 @@ onMounted(() => {
 });
 
 function followLink() {
-    window.open(generatedLink.value, "_blank").focus();
+    window.open(generatedLink.value, "_blank", "noopener,noreferrer")?.focus();
 }
 
 async function copyLink() {

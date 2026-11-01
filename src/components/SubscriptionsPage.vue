@@ -122,7 +122,12 @@
         <div class="mt-3 mb-2 flex h-[80vh] flex-col overflow-y-scroll pr-2">
             <div v-for="subscription in subscriptions" :key="subscription.name">
                 <div class="mr-3 flex items-center justify-between">
-                    <a :href="subscription.url" target="_blank" class="flex items-center overflow-hidden">
+                    <a
+                        :href="subscription.url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex items-center overflow-hidden"
+                    >
                         <img :src="subscription.avatar" class="size-8 rounded-full" />
                         <span class="ml-2">{{ subscription.name }}</span>
                     </a>
