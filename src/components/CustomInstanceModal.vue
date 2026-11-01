@@ -58,9 +58,14 @@ onMounted(() => {
 });
 
 function isValidInstanceUrl(str) {
-    var a = document.createElement("a");
-    a.href = str;
-    return a.host && a.host != window.location.host;
+    try {
+        const parsed = new URL(str);
+        // Only allow HTTP/HTTPS URLs to prevent script injection (e.g. javascript:, data:)
+        const isHttpOrHttps = parsed.protocol === "http:" || parsed.protocol === "https:";
+        return isHttpOrHttps && parsed.host && parsed.host !== window.location.host;
+    } catch {
+        return false;
+    }
 }
 
 async function addInstance() {
