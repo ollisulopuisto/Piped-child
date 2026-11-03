@@ -406,7 +406,8 @@ async function setPlayerAttrs(localPlayer, el, uri, mime, shaka) {
 
                 this.eventManager.listen(this.newTabButton_, "click", () => {
                     this.video.pause();
-                    window.open(url);
+                    // Prevent reverse tabnabbing (window.opener access) and referrer leakage
+                    window.open(url, "_blank", "noopener,noreferrer");
                 });
             }
         };
