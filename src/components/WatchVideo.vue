@@ -212,9 +212,15 @@
                     class="my-3 inline-block w-auto cursor-default rounded-sm bg-gray-300 px-4 py-2 text-gray-600 dark:bg-dark-400 dark:text-gray-400"
                 >
                     <span>{{ metaInfo.description ?? metaInfo.title }}</span>
-                    <a v-for="(link, linkIndex) in metaInfo.urls" :key="linkIndex" :href="link" class="underline">{{
-                        metaInfo.urlTexts[linkIndex]
-                    }}</a>
+                    <a
+                        v-for="(link, linkIndex) in metaInfo.urls"
+                        :key="linkIndex"
+                        :href="sanitizeExternalUrl(link)"
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        class="underline"
+                        >{{ metaInfo.urlTexts[linkIndex] }}</a
+                    >
                     <br />
                 </div>
 
@@ -375,7 +381,7 @@ import LoadingIndicatorPage from "./LoadingIndicatorPage.vue";
 import ToastComponent from "./ToastComponent.vue";
 import UiCheckbox from "./ui/Checkbox.vue";
 import { parseTimeParam } from "@/utils/Misc";
-import { purifyHTML, rewriteDescription } from "@/utils/HtmlUtils";
+import { purifyHTML, rewriteDescription, sanitizeExternalUrl } from "@/utils/HtmlUtils";
 import { fetchJson, apiUrl } from "@/composables/useApi.js";
 import {
     getPreferenceBoolean,

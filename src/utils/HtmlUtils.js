@@ -14,6 +14,20 @@ const linkifyOptions = {
     rel: "noopener noreferrer nofollow",
 };
 
+// Ensure URLs only use safe protocols to prevent XSS via javascript: or data: URIs
+export const sanitizeExternalUrl = url => {
+    if (!url || typeof url !== "string") return "#";
+    try {
+        const parsed = new URL(url, "https://piped.video");
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+            return url;
+        }
+    } catch {
+        return "#";
+    }
+    return "#";
+};
+
 export const rewriteDescription = text => {
     return linkifyHtml(text, linkifyOptions)
         .replaceAll(/(?:http(?:s)?:\/\/)?(?:www\.)?youtube\.com(\/[/a-zA-Z0-9_?=&-]*)/gm, "$1")
