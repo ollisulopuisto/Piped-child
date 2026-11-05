@@ -765,7 +765,15 @@ async function invalidateSession() {
 }
 
 function backupPreferences() {
-    const data = JSON.stringify(localStorage);
+    // Avoid leaking sensitive session auth tokens when exporting preferences to a file
+    const safeData = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && !key.startsWith("authToken")) {
+            safeData[key] = localStorage.getItem(key);
+        }
+    }
+    const data = JSON.stringify(safeData);
     download(data, "preferences.json", "application/json");
 }
 
@@ -773,8 +781,12 @@ function restorePreferences() {
     var file = fileSelectorEl.value.files[0];
     file.text().then(text => {
         const data = JSON.parse(text);
+        // Exclude dangerous prototype pollution keys and auth tokens during import
+        const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
         Object.keys(data).forEach(function (key) {
-            localStorage.setItem(key, data[key]);
+            if (!forbiddenKeys.has(key) && !key.startsWith("authToken")) {
+                localStorage.setItem(key, data[key]);
+            }
         });
         window.location.reload();
     });
