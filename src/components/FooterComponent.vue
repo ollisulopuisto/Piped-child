@@ -64,12 +64,19 @@
 <script setup>
 import { computed } from "vue";
 import { useConfig } from "@/composables/useConfig.js";
+import { sanitizeExternalUrl } from "@/utils/HtmlUtils.js";
 
 const { config } = useConfig();
 
-const donationHref = computed(() => config.value?.donationUrl);
-const statusPageHref = computed(() => config.value?.statusPageUrl);
-const privacyPolicyHref = computed(() => config.value?.privacyPolicyUrl);
+// Sanitize external config URLs to prevent XSS via javascript: or data: URIs
+function sanitizeConfigUrl(url) {
+    const sanitized = sanitizeExternalUrl(url);
+    return sanitized !== "#" ? sanitized : null;
+}
+
+const donationHref = computed(() => sanitizeConfigUrl(config.value?.donationUrl));
+const statusPageHref = computed(() => sanitizeConfigUrl(config.value?.statusPageUrl));
+const privacyPolicyHref = computed(() => sanitizeConfigUrl(config.value?.privacyPolicyUrl));
 </script>
 
 <style>
