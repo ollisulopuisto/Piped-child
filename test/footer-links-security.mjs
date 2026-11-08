@@ -8,10 +8,7 @@ assert.ok(
     vueFile.includes('import { sanitizeExternalUrl } from "@/utils/HtmlUtils.js";'),
     "FooterComponent.vue must import sanitizeExternalUrl from HtmlUtils",
 );
-assert.ok(
-    vueFile.includes("sanitizeConfigUrl"),
-    "FooterComponent.vue must define a sanitizeConfigUrl helper function",
-);
+assert.ok(vueFile.includes("sanitizeConfigUrl"), "FooterComponent.vue must define a sanitizeConfigUrl helper function");
 assert.ok(
     vueFile.includes("sanitizeConfigUrl(config.value?.donationUrl)"),
     "FooterComponent.vue must sanitize donationUrl",

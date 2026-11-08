@@ -144,6 +144,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onActivated } from "vue";
+import { useI18n } from "vue-i18n";
 import ModalComponent from "./ModalComponent.vue";
 import CreateGroupModal from "./CreateGroupModal.vue";
 import ConfirmModal from "./ConfirmModal.vue";
@@ -152,6 +153,8 @@ import { fetchJson, authApiUrl, getAuthToken, isAuthenticated } from "@/composab
 import { fetchSubscriptions, handleLocalSubscriptions } from "@/composables/useSubscriptions.js";
 import { getChannelGroups, createOrUpdateChannelGroup, deleteChannelGroup } from "@/composables/useChannelGroups.js";
 import { download } from "@/composables/useMisc.js";
+
+const { t } = useI18n();
 
 const fileSelector = ref(null);
 const subscriptions = ref([]);
@@ -257,10 +260,25 @@ function checkedChange(subscription) {
 async function importGroupsHandler() {
     const files = fileSelector.value.files;
     for (let file of files) {
-        const groups = JSON.parse(await file.text()).groups;
-        for (let group of groups) {
-            createOrUpdateChannelGroup(group);
-            channelGroups.value.push(group);
+        try {
+            const parsed = JSON.parse(await file.text());
+            if (!Array.isArray(parsed?.groups)) continue;
+
+            // Prevent prototype pollution and malformed object injection from untrusted files
+            const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
+            for (const group of parsed.groups) {
+                if (!group || typeof group !== "object" || Array.isArray(group)) continue;
+                if (forbiddenKeys.has(group.groupName) || typeof group.groupName !== "string") continue;
+
+                const cleanGroup = {
+                    groupName: group.groupName,
+                    channels: Array.isArray(group.channels) ? group.channels.filter(c => typeof c === "string") : [],
+                };
+                createOrUpdateChannelGroup(cleanGroup);
+                channelGroups.value.push(cleanGroup);
+            }
+        } catch {
+            alert(t("info.error"));
         }
     }
 }
