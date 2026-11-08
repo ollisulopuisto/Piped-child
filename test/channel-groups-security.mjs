@@ -19,9 +19,13 @@ assert.ok(
 // 2. Functional simulation of importGroupsHandler logic
 function simulateImportGroups(jsonText) {
     const importedGroups = [];
+    let alertTriggered = false;
     try {
         const parsed = JSON.parse(jsonText);
-        if (!Array.isArray(parsed?.groups)) return importedGroups;
+        if (!Array.isArray(parsed?.groups)) {
+            alertTriggered = true;
+            return { importedGroups, alertTriggered };
+        }
 
         const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
         for (const group of parsed.groups) {
@@ -35,9 +39,9 @@ function simulateImportGroups(jsonText) {
             importedGroups.push(cleanGroup);
         }
     } catch {
-        // fail safely on malformed JSON
+        alertTriggered = true;
     }
-    return importedGroups;
+    return { importedGroups, alertTriggered };
 }
 
 // Test case 1: Valid groups import
@@ -51,7 +55,8 @@ const validPayload = JSON.stringify({
         },
     ],
 });
-const validResults = simulateImportGroups(validPayload);
+const { importedGroups: validResults, alertTriggered: validAlert } = simulateImportGroups(validPayload);
+assert.equal(validAlert, false);
 assert.equal(validResults.length, 1);
 assert.equal(validResults[0].groupName, "Tech News");
 assert.deepEqual(validResults[0].channels, ["UC_x5XG1OV2P6uZZ5FSM9Ttw", "UCbjYfaGZgP8u_lS_7AeVwLQ"]);
@@ -83,17 +88,19 @@ const maliciousPayload = JSON.stringify({
         },
     ],
 });
-const sanitizedResults = simulateImportGroups(maliciousPayload);
+const { importedGroups: sanitizedResults, alertTriggered: sanitizedAlert } = simulateImportGroups(maliciousPayload);
 
+assert.equal(sanitizedAlert, false);
 assert.equal(sanitizedResults.length, 1);
 assert.equal(sanitizedResults[0].groupName, "Music");
 assert.deepEqual(sanitizedResults[0].channels, ["UC12345678901234567890123"]);
 assert.equal(Object.prototype.polluted, undefined, "Object.prototype must not be polluted");
 
-// Test case 3: Malformed JSON strings or empty/invalid structures
-assert.deepEqual(simulateImportGroups("malformed json"), []);
-assert.deepEqual(simulateImportGroups("{}"), []);
-assert.deepEqual(simulateImportGroups("null"), []);
-assert.deepEqual(simulateImportGroups('{"groups": "not-an-array"}'), []);
+// Test case 3: Malformed JSON strings or empty/invalid structures trigger alert and return empty
+assert.equal(simulateImportGroups("malformed json").alertTriggered, true);
+assert.equal(simulateImportGroups("{}").alertTriggered, true);
+assert.equal(simulateImportGroups("null").alertTriggered, true);
+assert.equal(simulateImportGroups('{"groups": "not-an-array"}').alertTriggered, true);
+assert.deepEqual(simulateImportGroups("{}").importedGroups, []);
 
 console.log("All channel groups import security verification tests passed successfully!");

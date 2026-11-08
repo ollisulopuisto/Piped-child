@@ -262,7 +262,10 @@ async function importGroupsHandler() {
     for (let file of files) {
         try {
             const parsed = JSON.parse(await file.text());
-            if (!Array.isArray(parsed?.groups)) continue;
+            if (!Array.isArray(parsed?.groups)) {
+                alert(t("info.error"));
+                continue;
+            }
 
             // Prevent prototype pollution and malformed object injection from untrusted files
             const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
