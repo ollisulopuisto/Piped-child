@@ -251,13 +251,34 @@ async function importPlaylistFile(file) {
         };
         tasks.push(createPlaylistWithVideos(playlist));
     } else if (text.includes('"Piped"')) {
-        let parsedPlaylists = JSON.parse(text).playlists;
-        if (!parsedPlaylists.length) {
+        try {
+            const parsed = JSON.parse(text);
+            if (!Array.isArray(parsed?.playlists)) {
+                alert(t("actions.no_valid_playlists"));
+                return;
+            }
+
+            // Prevent prototype pollution and malformed object injection from untrusted files
+            const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
+            for (let playlist of parsed.playlists) {
+                if (!playlist || typeof playlist !== "object" || Array.isArray(playlist)) continue;
+                if (forbiddenKeys.has(playlist.name) || typeof playlist.name !== "string" || !playlist.name.trim())
+                    continue;
+
+                const cleanPlaylist = {
+                    name: playlist.name.trim(),
+                    videos: Array.isArray(playlist.videos) ? playlist.videos.filter(v => typeof v === "string") : [],
+                };
+                tasks.push(createPlaylistWithVideos(cleanPlaylist));
+            }
+
+            if (!tasks.length) {
+                alert(t("actions.no_valid_playlists"));
+                return;
+            }
+        } catch {
             alert(t("actions.no_valid_playlists"));
             return;
-        }
-        for (let playlist of parsedPlaylists) {
-            tasks.push(createPlaylistWithVideos(playlist));
         }
     } else {
         alert(t("actions.no_valid_playlists"));
