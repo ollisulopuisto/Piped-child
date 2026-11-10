@@ -76,18 +76,37 @@ const progressPercent = computed(() => {
 
 function fileChange() {
     const file = fileSelector.value.files[0];
-    file.text().then(text => {
-        items.value = [];
-        const json = JSON.parse(text);
-        const parsed = json.watchHistory.map(video => {
-            return {
-                ...video,
-                watchedAt: video.watchedAt ?? 0,
-                currentTime: video.currentTime ?? 0,
-            };
+    file.text()
+        .then(text => {
+            items.value = [];
+            const json = JSON.parse(text);
+            if (!Array.isArray(json?.watchHistory)) return;
+
+            // Prevent prototype pollution and malformed object injection from untrusted files
+            const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
+            const parsed = [];
+            for (const video of json.watchHistory) {
+                if (!video || typeof video !== "object" || Array.isArray(video)) continue;
+                if (forbiddenKeys.has(video.videoId) || typeof video.videoId !== "string" || !video.videoId.trim()) {
+                    continue;
+                }
+
+                parsed.push({
+                    videoId: video.videoId.trim(),
+                    title: typeof video.title === "string" ? video.title : "",
+                    duration: typeof video.duration === "number" ? video.duration : 0,
+                    thumbnail: typeof video.thumbnail === "string" ? video.thumbnail : "",
+                    uploaderUrl: typeof video.uploaderUrl === "string" ? video.uploaderUrl : "",
+                    uploaderName: typeof video.uploaderName === "string" ? video.uploaderName : "",
+                    watchedAt: typeof video.watchedAt === "number" ? video.watchedAt : 0,
+                    currentTime: typeof video.currentTime === "number" ? video.currentTime : 0,
+                });
+            }
+            items.value = parsed.sort((a, b) => b.watchedAt - a.watchedAt);
+        })
+        .catch(() => {
+            items.value = [];
         });
-        items.value = parsed.sort((a, b) => b.watchedAt - a.watchedAt);
-    });
 }
 
 function handleImport() {
