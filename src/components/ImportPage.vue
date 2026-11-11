@@ -92,64 +92,64 @@ function fileChange() {
                 }
             };
 
-            // Invidious
-            if (text.indexOf("opml") != -1) {
+            // Google Takeout CSV
+            if (file.name.length >= 5 && file.name.slice(-4).toLowerCase() == ".csv") {
+                const lines = text.split("\n");
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    const id = line.slice(0, line.indexOf(","));
+                    if (id.length === 24) addChannelId(id);
+                }
+            }
+            // Invidious OPML
+            else if (text.includes("<opml") || text.includes("<outline")) {
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(text, "text/xml");
                 xmlDoc.querySelectorAll("outline[xmlUrl]").forEach(item => {
                     const url = item.getAttribute("xmlUrl");
                     if (url) addChannelId(url.slice(-24));
                 });
-            }
-            // Invidious JSON
-            else if (text.indexOf("thin_mode") != -1) {
-                const json = JSON.parse(text);
-                if (Array.isArray(json?.subscriptions)) {
-                    json.subscriptions.forEach(id => addChannelId(id));
-                }
-            }
-            // FreeTube DB
-            else if (text.indexOf("allChannels") != -1) {
-                const lines = text.split("\n");
-                for (let line of lines) {
-                    if (line === "") continue;
-                    const json = JSON.parse(line);
-                    if (Array.isArray(json?.subscriptions)) {
-                        json.subscriptions.forEach(item => {
-                            if (item?.id) addChannelId(item.id);
+            } else {
+                // Try JSON formats based on structure and element shapes
+                try {
+                    const json = JSON.parse(text);
+                    if (Array.isArray(json)) {
+                        // Google Takeout JSON: array of items with snippet.resourceId.channelId
+                        json.forEach(item => {
+                            const id = item?.snippet?.resourceId?.channelId;
+                            if (id) addChannelId(id);
                         });
+                    } else if (Array.isArray(json?.subscriptions)) {
+                        if (typeof json.subscriptions[0] === "string") {
+                            // Invidious JSON: array of channel ID strings
+                            json.subscriptions.forEach(id => addChannelId(id));
+                        } else {
+                            // NewPipe / FreeTube JSON: array of channel subscription objects
+                            json.subscriptions
+                                .filter(item => item?.service_id == 0 || item?.service_id == undefined)
+                                .forEach(item => {
+                                    if (typeof item?.url === "string") addChannelId(item.url.slice(-24));
+                                    else if (typeof item?.id === "string") addChannelId(item.id);
+                                });
+                        }
                     }
-                }
-            }
-            // NewPipe
-            else if (text.indexOf("subscriptions") != -1) {
-                const json = JSON.parse(text);
-                if (Array.isArray(json?.subscriptions)) {
-                    json.subscriptions
-                        // if service_id is undefined, chances are it's a freetube export
-                        .filter(item => item?.service_id == 0 || item?.service_id == undefined)
-                        .forEach(item => {
-                            if (typeof item?.url === "string") addChannelId(item.url.slice(-24));
-                        });
-                }
-            }
-            // Google Takeout JSON
-            else if (text.indexOf("contentDetails") != -1) {
-                const json = JSON.parse(text);
-                if (Array.isArray(json)) {
-                    json.forEach(item => {
-                        const id = item?.snippet?.resourceId?.channelId;
-                        if (id) addChannelId(id);
-                    });
-                }
-            }
-            // Google Takeout CSV
-            else if (file.name.length >= 5 && file.name.slice(-4).toLowerCase() == ".csv") {
-                const lines = text.split("\n");
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i];
-                    const id = line.slice(0, line.indexOf(","));
-                    if (id.length === 24) addChannelId(id);
+                } catch {
+                    // Line-delimited JSON (FreeTube DB)
+                    const lines = text.split("\n");
+                    for (let line of lines) {
+                        if (line.trim() === "") continue;
+                        try {
+                            const lineJson = JSON.parse(line);
+                            if (Array.isArray(lineJson?.subscriptions)) {
+                                lineJson.subscriptions.forEach(item => {
+                                    if (typeof item?.id === "string") addChannelId(item.id);
+                                    else if (typeof item?.url === "string") addChannelId(item.url.slice(-24));
+                                });
+                            }
+                        } catch {
+                            // ignore malformed lines
+                        }
+                    }
                 }
             }
 
