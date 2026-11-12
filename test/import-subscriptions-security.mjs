@@ -3,20 +3,27 @@ import { readFileSync } from "node:fs";
 
 // 1. Static check: Verify ImportPage.vue contains sanitization and validation logic
 const vueFile = readFileSync("src/components/ImportPage.vue", "utf8");
-assert.ok(vueFile.includes("forbiddenKeys"), "ImportPage.vue must check against forbidden prototype pollution keys");
+const idsFile = readFileSync("src/utils/ImportIds.js", "utf8");
+assert.ok(idsFile.includes("FORBIDDEN_KEYS"), "ImportIds.js must check against forbidden prototype pollution keys");
 assert.ok(
-    vueFile.includes("forbiddenKeys.has(id.trim())"),
-    "ImportPage.vue must reject prototype pollution channel ID values",
+    idsFile.includes("FORBIDDEN_KEYS.has(id.trim())"),
+    "ImportIds.js must reject prototype pollution channel ID values",
 );
+assert.ok(
+    vueFile.includes("isValidChannelId") && vueFile.includes("channelIdFromEntry"),
+    "ImportPage.vue must use the shared validators",
+);
+const { isValidChannelId, channelIdFromEntry } = await import("../src/utils/ImportIds.js");
 
 // 2. Functional simulation of fileChange parsing logic in ImportPage.vue
 function simulateImportSubscriptions(text, filename = "subscriptions.json") {
     const parsedSubs = [];
     const addChannelId = id => {
-        const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
-        if (typeof id === "string" && !forbiddenKeys.has(id.trim()) && /^[a-zA-Z0-9_-]{1,64}$/.test(id.trim())) {
-            parsedSubs.push(id.trim());
-        }
+        if (isValidChannelId(id)) parsedSubs.push(id.trim());
+    };
+    const addEntry = (entry, idFromUrl) => {
+        const id = channelIdFromEntry(entry, idFromUrl);
+        if (id !== null) parsedSubs.push(id);
     };
 
     try {
@@ -50,9 +57,7 @@ function simulateImportSubscriptions(text, filename = "subscriptions.json") {
                             typeof item === "object" &&
                             (item.service_id == 0 || item.service_id == undefined)
                         ) {
-                            if (typeof item.id === "string") addChannelId(item.id);
-                            else if (typeof item.url === "string")
-                                addChannelId(item.url.replace(/\/+$/, "").slice(-24));
+                            addEntry(item, url => url.replace(/\/+$/, "").slice(-24));
                         }
                     });
                 }
@@ -64,8 +69,7 @@ function simulateImportSubscriptions(text, filename = "subscriptions.json") {
                         const lineJson = JSON.parse(line);
                         if (Array.isArray(lineJson?.subscriptions)) {
                             lineJson.subscriptions.forEach(item => {
-                                if (typeof item?.id === "string") addChannelId(item.id);
-                                else if (typeof item?.url === "string") addChannelId(item.url.slice(-24));
+                                addEntry(item, url => url.slice(-24));
                             });
                         }
                     } catch {
@@ -197,3 +201,32 @@ assert.equal(suffixedSubs[0], "UC_x5XG1OV2P6uZZ5FSM9Ttw");
 assert.deepEqual(simulateImportSubscriptions("malformed { json"), []);
 
 console.log("All subscription import security verification tests passed successfully!");
+
+// Devin finding: an invalid explicit id must not hide a valid channel url.
+const urlFallback = simulateImportSubscriptions(
+    JSON.stringify({
+        subscriptions: [
+            { service_id: 0, id: "__proto__", url: "https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw" },
+            { service_id: 0, id: "bad id!", url: "https://www.youtube.com/channel/UCbjYfaGZgP8u_lS_7AeVwLQ/" },
+            {
+                service_id: 0,
+                id: "UCvalidIdOnly_000000000AA",
+                url: "https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
+            },
+            { service_id: 0, id: "__proto__", url: "https://example.com/__proto__" },
+            { service_id: 0, id: "__proto__" },
+        ],
+    }),
+);
+assert.deepEqual(urlFallback, ["UC_x5XG1OV2P6uZZ5FSM9Ttw", "UCbjYfaGZgP8u_lS_7AeVwLQ", "UCvalidIdOnly_000000000AA"]);
+const freeTubeFallback = simulateImportSubscriptions(
+    JSON.stringify({
+        subscriptions: [{ id: "constructor", url: "https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw" }],
+    }) + "\n{bad",
+);
+assert.deepEqual(freeTubeFallback, ["UC_x5XG1OV2P6uZZ5FSM9Ttw"]);
+assert.equal(
+    channelIdFromEntry({ id: "__proto__", url: "x" }, () => "prototype"),
+    null,
+);
+console.log("import-subscriptions-security: ok");

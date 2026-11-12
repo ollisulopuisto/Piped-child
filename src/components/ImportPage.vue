@@ -62,6 +62,7 @@ import Button from "./ui/Button.vue";
 import UiCheckbox from "./ui/Checkbox.vue";
 import { fetchJson, authApiUrl, getAuthToken, isAuthenticated } from "@/composables/useApi.js";
 import { getLocalSubscriptions } from "@/composables/useSubscriptions.js";
+import { isValidChannelId, channelIdFromEntry } from "@/utils/ImportIds.js";
 
 const { t } = useI18n();
 
@@ -81,15 +82,11 @@ function fileChange() {
         .then(text => {
             const parsedSubs = [];
             const addChannelId = id => {
-                // Prevent prototype pollution and malformed channel identifiers from untrusted files
-                const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
-                if (
-                    typeof id === "string" &&
-                    !forbiddenKeys.has(id.trim()) &&
-                    /^[a-zA-Z0-9_-]{1,64}$/.test(id.trim())
-                ) {
-                    parsedSubs.push(id.trim());
-                }
+                if (isValidChannelId(id)) parsedSubs.push(id.trim());
+            };
+            const addEntry = (entry, idFromUrl) => {
+                const id = channelIdFromEntry(entry, idFromUrl);
+                if (id !== null) parsedSubs.push(id);
             };
 
             // Google Takeout CSV
@@ -130,9 +127,7 @@ function fileChange() {
                                 (item.service_id == 0 || item.service_id == undefined)
                             ) {
                                 // NewPipe / FreeTube JSON objects: prefer the explicit id, then the URL
-                                if (typeof item.id === "string") addChannelId(item.id);
-                                else if (typeof item.url === "string")
-                                    addChannelId(item.url.replace(/\/+$/, "").slice(-24));
+                                addEntry(item, url => url.replace(/\/+$/, "").slice(-24));
                             }
                         });
                     }
@@ -145,8 +140,7 @@ function fileChange() {
                             const lineJson = JSON.parse(line);
                             if (Array.isArray(lineJson?.subscriptions)) {
                                 lineJson.subscriptions.forEach(item => {
-                                    if (typeof item?.id === "string") addChannelId(item.id);
-                                    else if (typeof item?.url === "string") addChannelId(item.url.slice(-24));
+                                    addEntry(item, url => url.slice(-24));
                                 });
                             }
                         } catch {
