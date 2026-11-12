@@ -62,6 +62,7 @@ import Button from "./ui/Button.vue";
 import UiCheckbox from "./ui/Checkbox.vue";
 import { fetchJson, authApiUrl, getAuthToken, isAuthenticated } from "@/composables/useApi.js";
 import { getLocalSubscriptions } from "@/composables/useSubscriptions.js";
+import { isValidChannelId, channelIdFromEntry } from "@/utils/ImportIds.js";
 
 const { t } = useI18n();
 
@@ -77,66 +78,83 @@ onActivated(() => {
 
 function fileChange() {
     const file = fileSelector.value.files[0];
-    file.text().then(text => {
-        subscriptions.value = [];
+    file.text()
+        .then(text => {
+            const parsedSubs = [];
+            const addChannelId = id => {
+                if (isValidChannelId(id)) parsedSubs.push(id.trim());
+            };
+            const addEntry = (entry, idFromUrl) => {
+                const id = channelIdFromEntry(entry, idFromUrl);
+                if (id !== null) parsedSubs.push(id);
+            };
 
-        // Invidious
-        if (text.indexOf("opml") != -1) {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(text, "text/xml");
-            xmlDoc.querySelectorAll("outline[xmlUrl]").forEach(item => {
-                const url = item.getAttribute("xmlUrl");
-                const id = url.slice(-24);
-                subscriptions.value.push(id);
-            });
-        }
-        // NewPipe
-        else if (text.indexOf("subscriptions") != -1) {
-            const json = JSON.parse(text);
-            json.subscriptions
-                // if service_id is undefined, chances are it's a freetube export
-                .filter(item => item.service_id == 0 || item.service_id == undefined)
-                .forEach(item => {
-                    const url = item.url;
-                    const id = url.slice(-24);
-                    subscriptions.value.push(id);
-                });
-        }
-        // Invidious JSON
-        else if (text.indexOf("thin_mode") != -1) {
-            const json = JSON.parse(text);
-            subscriptions.value = json.subscriptions;
-        }
-        // FreeTube DB
-        else if (text.indexOf("allChannels") != -1) {
-            const lines = text.split("\n");
-            for (let line of lines) {
-                if (line === "") continue;
-                const json = JSON.parse(line);
-                json.subscriptions.forEach(item => {
-                    subscriptions.value.push(item.id);
-                });
+            // Google Takeout CSV
+            if (file.name.length >= 5 && file.name.slice(-4).toLowerCase() == ".csv") {
+                const lines = text.split("\n");
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    const id = line.slice(0, line.indexOf(","));
+                    if (id.length === 24) addChannelId(id);
+                }
             }
-        }
-        // Google Takeout JSON
-        else if (text.indexOf("contentDetails") != -1) {
-            const json = JSON.parse(text);
-            json.forEach(item => {
-                const id = item.snippet.resourceId.channelId;
-                subscriptions.value.push(id);
-            });
-        }
+            // Invidious OPML
+            else if (text.includes("<opml") || text.includes("<outline")) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, "text/xml");
+                xmlDoc.querySelectorAll("outline[xmlUrl]").forEach(item => {
+                    const url = item.getAttribute("xmlUrl");
+                    if (url) addChannelId(url.slice(-24));
+                });
+            } else {
+                // Try JSON formats based on structure and element shapes
+                try {
+                    const json = JSON.parse(text);
+                    if (Array.isArray(json)) {
+                        // Google Takeout JSON: array of items with snippet.resourceId.channelId
+                        json.forEach(item => {
+                            const id = item?.snippet?.resourceId?.channelId;
+                            if (id) addChannelId(id);
+                        });
+                    } else if (Array.isArray(json?.subscriptions)) {
+                        json.subscriptions.forEach(item => {
+                            if (typeof item === "string") {
+                                // Invidious JSON: channel ID strings
+                                addChannelId(item);
+                            } else if (
+                                item &&
+                                typeof item === "object" &&
+                                (item.service_id == 0 || item.service_id == undefined)
+                            ) {
+                                // NewPipe / FreeTube JSON objects: prefer the explicit id, then the URL
+                                addEntry(item, url => url.replace(/\/+$/, "").slice(-24));
+                            }
+                        });
+                    }
+                } catch {
+                    // Line-delimited JSON (FreeTube DB)
+                    const lines = text.split("\n");
+                    for (let line of lines) {
+                        if (line.trim() === "") continue;
+                        try {
+                            const lineJson = JSON.parse(line);
+                            if (Array.isArray(lineJson?.subscriptions)) {
+                                lineJson.subscriptions.forEach(item => {
+                                    addEntry(item, url => url.slice(-24));
+                                });
+                            }
+                        } catch {
+                            // ignore malformed lines
+                        }
+                    }
+                }
+            }
 
-        // Google Takeout CSV
-        else if (file.name.length >= 5 && file.name.slice(-4).toLowerCase() == ".csv") {
-            const lines = text.split("\n");
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i];
-                const id = line.slice(0, line.indexOf(","));
-                if (id.length === 24) subscriptions.value.push(id);
-            }
-        }
-    });
+            subscriptions.value = parsedSubs;
+        })
+        .catch(() => {
+            subscriptions.value = [];
+        });
 }
 
 function handleImport() {
