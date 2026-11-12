@@ -120,18 +120,21 @@ function fileChange() {
                             if (id) addChannelId(id);
                         });
                     } else if (Array.isArray(json?.subscriptions)) {
-                        if (typeof json.subscriptions[0] === "string") {
-                            // Invidious JSON: array of channel ID strings
-                            json.subscriptions.forEach(id => addChannelId(id));
-                        } else {
-                            // NewPipe / FreeTube JSON: array of channel subscription objects
-                            json.subscriptions
-                                .filter(item => item?.service_id == 0 || item?.service_id == undefined)
-                                .forEach(item => {
-                                    if (typeof item?.url === "string") addChannelId(item.url.slice(-24));
-                                    else if (typeof item?.id === "string") addChannelId(item.id);
-                                });
-                        }
+                        json.subscriptions.forEach(item => {
+                            if (typeof item === "string") {
+                                // Invidious JSON: channel ID strings
+                                addChannelId(item);
+                            } else if (
+                                item &&
+                                typeof item === "object" &&
+                                (item.service_id == 0 || item.service_id == undefined)
+                            ) {
+                                // NewPipe / FreeTube JSON objects: prefer the explicit id, then the URL
+                                if (typeof item.id === "string") addChannelId(item.id);
+                                else if (typeof item.url === "string")
+                                    addChannelId(item.url.replace(/\/+$/, "").slice(-24));
+                            }
+                        });
                     }
                 } catch {
                     // Line-delimited JSON (FreeTube DB)

@@ -42,16 +42,19 @@ function simulateImportSubscriptions(text, filename = "subscriptions.json") {
                         if (id) addChannelId(id);
                     });
                 } else if (Array.isArray(json?.subscriptions)) {
-                    if (typeof json.subscriptions[0] === "string") {
-                        json.subscriptions.forEach(id => addChannelId(id));
-                    } else {
-                        json.subscriptions
-                            .filter(item => item?.service_id == 0 || item?.service_id == undefined)
-                            .forEach(item => {
-                                if (typeof item?.url === "string") addChannelId(item.url.slice(-24));
-                                else if (typeof item?.id === "string") addChannelId(item.id);
-                            });
-                    }
+                    json.subscriptions.forEach(item => {
+                        if (typeof item === "string") {
+                            addChannelId(item);
+                        } else if (
+                            item &&
+                            typeof item === "object" &&
+                            (item.service_id == 0 || item.service_id == undefined)
+                        ) {
+                            if (typeof item.id === "string") addChannelId(item.id);
+                            else if (typeof item.url === "string")
+                                addChannelId(item.url.replace(/\/+$/, "").slice(-24));
+                        }
+                    });
                 }
             } catch {
                 const lines = text.split("\n");
@@ -168,7 +171,29 @@ const takeoutSubs = simulateImportSubscriptions(googleTakeoutJson);
 assert.equal(takeoutSubs.length, 1);
 assert.equal(takeoutSubs[0], "UC_x5XG1OV2P6uZZ5FSM9Ttw");
 
-// Test case 6: Malformed JSON handled gracefully without crashing
+// Test case 6: Invidious JSON with a null first entry still imports the valid channel IDs
+const nullFirstInvidious = JSON.stringify({
+    subscriptions: [null, "UC_x5XG1OV2P6uZZ5FSM9Ttw"],
+});
+const nullFirstSubs = simulateImportSubscriptions(nullFirstInvidious);
+assert.equal(nullFirstSubs.length, 1, "A null first entry must not drop later valid channel ID strings");
+assert.equal(nullFirstSubs[0], "UC_x5XG1OV2P6uZZ5FSM9Ttw");
+
+// Test case 7: FreeTube JSON object with both id and a trailing-slash URL keeps the valid id
+const freeTubeSuffixedUrl = JSON.stringify({
+    allChannels: true,
+    subscriptions: [
+        {
+            id: "UC_x5XG1OV2P6uZZ5FSM9Ttw",
+            url: "https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw/",
+        },
+    ],
+});
+const suffixedSubs = simulateImportSubscriptions(freeTubeSuffixedUrl);
+assert.equal(suffixedSubs.length, 1, "A record with an id and a URL ending in / must keep the id");
+assert.equal(suffixedSubs[0], "UC_x5XG1OV2P6uZZ5FSM9Ttw");
+
+// Test case 8: Malformed JSON handled gracefully without crashing
 assert.deepEqual(simulateImportSubscriptions("malformed { json"), []);
 
 console.log("All subscription import security verification tests passed successfully!");
