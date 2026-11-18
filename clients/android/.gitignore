@@ -1,0 +1,7 @@
+# Build output and local environment — never commit (review finding #31-1).
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
