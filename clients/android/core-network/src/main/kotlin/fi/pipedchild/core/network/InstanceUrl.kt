@@ -50,6 +50,46 @@ internal fun normalizeInstanceUrl(raw: String): String {
 
 private val ipv4 = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
 
+/** Loopback (::1), unique-local fc00::/7 (the tailnet ULA prefix lives
+ *  here) and link-local fe80::/10 (never leaves the link). Zone ids and
+ *  embedded-IPv4 tails are not accepted: no verified LAN config needs them. */
+private fun isPrivateIpv6(bare: String): Boolean {
+    val b = parseIpv6Bytes(bare) ?: return false
+    if (b.take(15).all { it == 0.toByte() } && b[15] == 1.toByte()) return true // ::1
+    val b0 = b[0].toInt() and 0xff
+    if (b0 and 0xfe == 0xfc) return true // fc00::/7 unique-local
+    if (b0 == 0xfe && (b[1].toInt() and 0xff and 0xc0) == 0x80) return true // fe80::/10 link-local
+    return false
+}
+
+/** Parses an IPv6 literal (compressed or full) into 16 bytes, or null when
+ *  the input is not a pure IPv6 literal. */
+private fun parseIpv6Bytes(s: String): ByteArray? {
+    if ('%' in s || '.' in s) return null
+    val halves = s.split("::")
+    if (halves.size > 2) return null
+    fun groups(part: String): List<Int>? {
+        if (part.isEmpty()) return emptyList()
+        return part.split(':').map {
+            if (it.isEmpty() || it.length > 4 ||
+                it.any { c -> !c.isDigit() && c.lowercaseChar() !in 'a'..'f' }
+            ) return null
+            it.toInt(16)
+        }
+    }
+    val head = groups(halves[0]) ?: return null
+    val full = if (halves.size == 2) {
+        val tail = groups(halves[1]) ?: return null
+        val missing = 8 - head.size - tail.size
+        if (missing < 1) return null
+        head + List(missing) { 0 } + tail
+    } else {
+        if (head.size != 8) return null
+        head
+    }
+    return full.flatMap { listOf((it shr 8).toByte(), (it and 0xff).toByte()) }.toByteArray()
+}
+
 /** Loopback and non-public hosts where plain http is acceptable for a
  *  self-hosted instance: localhost, .local/.internal, RFC 1918, link-local,
  *  and the Tailscale CGNAT range (the family tailnet routes 100.64/10). */
@@ -58,9 +98,10 @@ internal fun isPrivateOrLoopbackHost(host: String): Boolean {
         host.endsWith(".local") || host.endsWith(".internal")
     ) return true
     // URI.getHost() keeps the brackets of an IPv6 literal; classify the
-    // bracketed and unbracketed, compressed and expanded loopback spellings
+    // bare address
     val bare = host.removePrefix("[").removeSuffix("]")
-    if (bare == "::1" || bare == "0:0:0:0:0:0:0:1") return true
+    if (':' in bare) return isPrivateIpv6(bare)
+    // the strict regex keeps "10.1.2.3.example.com" public (CWE-319)
     val m = ipv4.matchEntire(host) ?: return false
     val octets = m.groupValues.drop(1).map { it.toInt() }
     if (octets.any { it > 255 }) return false

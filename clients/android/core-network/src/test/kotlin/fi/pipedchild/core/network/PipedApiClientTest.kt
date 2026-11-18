@@ -511,6 +511,9 @@ class InstanceUrlValidationTest {
         // loopback spellings must both be recognized
         PipedApiClient("http://[::1]:8080")
         PipedApiClient("http://[0:0:0:0:0:0:0:1]")
+        // tailnet ULA (fc00::/7) and link-local stay private
+        PipedApiClient("http://[fd7a:115c:a1e0::1]:8080")
+        PipedApiClient("http://[fe80::1]")
     }
 
     @Test
@@ -520,6 +523,9 @@ class InstanceUrlValidationTest {
         assertFailsWith<IllegalArgumentException> { PipedApiClient("http://pipedapi.example.com") }
         assertFailsWith<IllegalArgumentException> { PipedApiClient("http://8.8.8.8") }
         assertFailsWith<IllegalArgumentException> { PipedApiClient("http://[2001:db8::1]") }
+        // a hostname that starts with a private-looking dotted prefix is
+        // still public: every label must be numeric (CWE-319)
+        assertFailsWith<IllegalArgumentException> { PipedApiClient("http://10.1.2.3.example.com") }
     }
 
     @Test
