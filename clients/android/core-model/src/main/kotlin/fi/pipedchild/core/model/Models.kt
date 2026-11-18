@@ -48,6 +48,9 @@ sealed class SearchItem {
         val uploaderVerified: Boolean = false,
         val shortDescription: String? = null,
         val isShort: Boolean = false,
+        // Encoded so a SearchResponse survives an encode/decode round-trip
+        // (JsonContentPolymorphicSerializer adds no discriminator itself).
+        @kotlinx.serialization.Required val type: String = "stream",
     ) : SearchItem() {
         val videoId: String
             get() = url.substringAfter("v=", url)
@@ -60,8 +63,11 @@ sealed class SearchItem {
         val thumbnail: String? = null,
         val description: String? = null,
         val subscribers: Long = -1,
-        val videosCount: Long = -1,
+        // Piped calls the channel video count `videos` (see frontend
+        // ChannelItem.vue), NOT `videosCount`.
+        val videos: Long = -1,
         val verified: Boolean = false,
+        @kotlinx.serialization.Required val type: String = "channel",
     ) : SearchItem()
 
     @Serializable
@@ -74,6 +80,7 @@ sealed class SearchItem {
         val uploaderVerified: Boolean = false,
         val videos: Long = -1,
         val description: String? = null,
+        @kotlinx.serialization.Required val type: String = "playlist",
     ) : SearchItem()
 
     /** Forward compatibility: an unmodelled type must not break decoding. */

@@ -98,11 +98,13 @@ class FixtureContractTest {
         // Devin finding: channel/playlist items carry `name`, not `title`;
         // one such item must not break decoding the whole response.
         val channelOnly = json.decodeFromString<SearchResponse>(
-            """{"items":[{"type":"channel","url":"/channel/UCexample","name":"Example channel"}]}""",
+            """{"items":[{"type":"channel","url":"/channel/UCexample","name":"Example channel","videos":42}]}""",
         )
         assertEquals(1, channelOnly.items.size)
         assertTrue(channelOnly.items[0] is SearchItem.Channel)
         assertEquals("Example channel", (channelOnly.items[0] as SearchItem.Channel).name)
+        // Piped calls the channel video count `videos` (frontend ChannelItem.vue)
+        assertEquals(42, (channelOnly.items[0] as SearchItem.Channel).videos)
 
         val playlistOnly = json.decodeFromString<SearchResponse>(
             """{"items":[{"type":"playlist","url":"/playlist?list=PLexample","name":"Example playlist","videos":12}]}""",
@@ -122,6 +124,24 @@ class FixtureContractTest {
         assertTrue(mixed.items[1] is SearchItem.Channel)
         assertTrue(mixed.items[2] is SearchItem.Playlist)
         assertTrue(mixed.items[3] is SearchItem.Unknown) // forward-compat
+    }
+
+    @Test
+    fun `search response survives an encode decode round trip`() {
+        // JsonContentPolymorphicSerializer adds no discriminator on encode, so
+        // each item declares its own `type`; without it a round-trip decodes
+        // everything as Unknown and loses titles.
+        val original = SearchResponse(
+            items = listOf(
+                SearchItem.Stream(url = "/watch?v=abc", title = "A video"),
+                SearchItem.Channel(url = "/channel/UCx", name = "A channel", videos = 7),
+                SearchItem.Playlist(url = "/playlist?list=PLx", name = "A playlist", videos = 3),
+            ),
+        )
+        val encoded = json.encodeToString(SearchResponse.serializer(), original)
+        val decoded = json.decodeFromString<SearchResponse>(encoded)
+        assertEquals(original, decoded)
+        assertTrue(encoded.contains("\"type\":\"channel\""))
     }
 
     @Test
