@@ -42,7 +42,7 @@ returns 404 on current instances (verified on api.piped.private.coffee).
 | `/subscriptions` (+ `/unsubscribe`, `/subscribed`) | GET/POST | token | Subscription management | no | |
 | `/subscriptions/unauthenticated` | POST | no | Multi-channel unauth sub feed | no | |
 | `/user/playlists` (+ create/delete/rename/add/remove/description) | GET/POST | token | Playlist management | no | full CRUD exists |
-| `/playlists/{id}`, `/nextpage/playlists/{id}` | GET | no | Playlist content | no | frontend `getPlaylist` sends NO Authorization header (verified in usePlaylists.js); auth needed only for `/user/playlists/*` management |
+| `/playlists/{id}`, `/nextpage/playlists/{id}` | GET | no | Playlist content | no | frontend `getPlaylist` sends NO Authorization header (usePlaylists.js:85-94, verified 2026-11-18); auth needed only for `/user/playlists/*` management |
 | `/import`, `/import/playlist` | POST | token | YouTube import | no | |
 | `/rss/playlists/{id}` | GET | token | Playlist RSS | no | |
 

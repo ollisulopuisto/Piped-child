@@ -132,7 +132,9 @@ REST API with a per-child "screen-time bank" and a screen-session concept
 (request minutes on a named target, server keeps the clock, session carries
 `ends_at`/`locks_at`, unused minutes refundable, optional parent approval).
 
-**What is confirmed by the owner (2026-11-18):**
+**Stated in the owner handoff (2026-11-18, not verifiable from this repo).
+ChoreKeeper integration itself remains a proposed OPTIONAL feature — nothing
+here confirms it will be built:**
 
 - The Chromecast sits on the home Wi-Fi; the home router is in Tailscale.
 - The owner wants the Android TV app to be ABLE to reach the ChoreKeeper
