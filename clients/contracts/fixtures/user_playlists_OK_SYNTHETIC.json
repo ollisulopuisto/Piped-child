@@ -2,14 +2,15 @@
   {
     "id": "synthetic-playlist-id-1",
     "name": "Watch Later",
-    "shortDescription": null,
-    "thumbnail": "https://pipedproxy.example.com/playlist-thumb.jpg",
-    "videos": 3
+    "shortDescription": "Synthetic user playlist.",
+    "thumbnail": "https://piped-proxy.example/vi/syntheticVid1/hq720.jpg?host=i.ytimg.com",
+    "videos": 2
   },
   {
     "id": "synthetic-playlist-id-2",
-    "name": "Second list",
-    "shortDescription": "No thumbnail on this one.",
+    "name": "Empty playlist",
+    "shortDescription": null,
+    "thumbnail": null,
     "videos": 0
   }
 ]
