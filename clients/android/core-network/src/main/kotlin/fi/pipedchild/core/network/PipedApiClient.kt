@@ -123,10 +123,12 @@ class PipedApiClient(
     override fun close() = client.close()
 
     /** Encodes one dynamic path segment so an id cannot break out of its
-     *  path position ("/", "?", "#"). URLEncoder is form-style, so "+"
-     *  becomes the path-correct "%20". */
-    private fun String.pathSegment(): String =
-        URLEncoder.encode(this, "UTF-8").replace("+", "%20")
+     *  path position ("/", "?", "#"), and rejects "."/"..", which percent
+     *  encoding cannot neutralize. */
+    private fun String.pathSegment(): String {
+        require(this != "." && this != ".." && isNotEmpty()) { "invalid id segment" }
+        return URLEncoder.encode(this, "UTF-8").replace("+", "%20")
+    }
 
     // ---------- discovery ----------
 
@@ -177,7 +179,7 @@ class PipedApiClient(
         call(
             HttpMethod.Get,
             "$baseUrl/sponsors/${videoId.pathSegment()}",
-            params = mapOf("category" to categories.joinToString(",", "[", "]") { "\"$it\"" }),
+            params = mapOf("category" to JsonArray(categories.map { JsonPrimitive(it) }).toString()),
         )
 
     /** Instance-proxied DeArrow. */

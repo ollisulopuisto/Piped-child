@@ -9,6 +9,8 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -498,9 +500,45 @@ class InstanceUrlValidationTest {
 
     @Test
     fun `self-hosted instance with a port is allowed`() {
-        // the family may self-host; localhost/ports must keep working
+        // the family may self-host; localhost, private ranges and the
+        // tailnet CGNAT range must keep working over plain http
         PipedApiClient("http://192.168.1.222:8080")
         PipedApiClient("http://localhost:3000")
+        PipedApiClient("http://10.0.0.2")
+        PipedApiClient("http://100.64.1.5:8080")
+        PipedApiClient("http://nas.local")
+    }
+
+    @Test
+    fun `plain http is rejected for public hosts`() {
+        // credentials and tokens are sent to the instance; http to a public
+        // host would expose them on the wire
+        assertFailsWith<IllegalArgumentException> { PipedApiClient("http://pipedapi.example.com") }
+        assertFailsWith<IllegalArgumentException> { PipedApiClient("http://8.8.8.8") }
+    }
+
+    @Test
+    fun `dot segments are rejected as ids`() = runTest {
+        // percent-encoding cannot neutralize ".." - it would walk a path level
+        val c = PipedApiClient("https://pipedapi.example.com")
+        assertFailsWith<IllegalArgumentException> { c.streams("..") }
+        assertFailsWith<IllegalArgumentException> { c.streams(".") }
+    }
+
+    @Test
+    fun `sponsor categories are encoded as real JSON even with quotes`() = runTest {
+        val recorded = mutableListOf<HttpRequestData>()
+        val engine = MockEngine { req ->
+            recorded += req
+            respond("{}", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }
+        val c = PipedApiClient("https://pipedapi.example.com", InMemoryTokenStore(), engine)
+        val nasty = listOf("sponsor", "we\"ird")
+        c.sponsors("dQw4w9WgXcQ", nasty)
+        val param = recorded.single().url.parameters["category"]!!
+        // must round-trip as JSON, not break out of the array
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(param).jsonArray
+        assertEquals(nasty, parsed.map { it.jsonPrimitive.content })
     }
 }
 
