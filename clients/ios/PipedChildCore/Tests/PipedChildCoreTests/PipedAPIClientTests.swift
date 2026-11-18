@@ -426,10 +426,14 @@ final class PipedAPIClientTests: XCTestCase {
         _ = try PipedAPIClient(baseURL: "http://192.168.1.222:8080")
         _ = try PipedAPIClient(baseURL: "http://localhost:3000")
         _ = try PipedAPIClient(baseURL: "http://100.64.1.5:8080") // tailnet
+        // bracketed IPv6 loopback, compressed and expanded spellings
+        _ = try PipedAPIClient(baseURL: "http://[::1]:8080")
+        _ = try PipedAPIClient(baseURL: "http://[0:0:0:0:0:0:0:1]")
         // credentials and tokens are sent to the instance, so plain http to
         // a public host is rejected (would expose them on the wire)
         XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://pipedapi.example.com"))
         XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://8.8.8.8"))
+        XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://[2001:db8::1]"))
     }
 }
 

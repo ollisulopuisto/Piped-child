@@ -54,7 +54,13 @@ public enum InstanceURLError: Error, Equatable {
 /// working.
 func isPrivateOrLoopbackHost(_ host: String) -> Bool {
     let h = host.lowercased()
-    if h == "localhost" || h.hasSuffix(".local") || h.hasSuffix(".internal") || h == "::1" || h == "[::1]" {
+    if h == "localhost" || h.hasSuffix(".local") || h.hasSuffix(".internal") {
+        return true
+    }
+    // URL hosts may keep IPv6 brackets; classify bracketed/unbracketed and
+    // compressed/expanded loopback spellings
+    let bare = h.hasPrefix("[") && h.hasSuffix("]") ? String(h.dropFirst().dropLast()) : h
+    if bare == "::1" || bare == "0:0:0:0:0:0:0:1" {
         return true
     }
     let parts = h.split(separator: ".").compactMap { Int($0) }
