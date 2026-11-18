@@ -294,6 +294,58 @@ final class PipedAPIClientTests: XCTestCase {
         }
     }
 
+    func testPlaylistReadsHitTheAuthInstanceWithoutCredentials() async throws {
+        // verified in usePlaylists.js getPlaylist + PlaylistPage.vue: playlist
+        // content comes from authApiUrl() with no Authorization header
+        let client = try makeClient(
+            url: "https://discovery.example",
+            authBaseURL: "https://accounts.example"
+        ) { request in
+            self.json(request.url!, self.fixtureData("playlist_OK_SYNTHETIC.json"))
+        }
+        _ = try await client.playlist("pl-1")
+        _ = try await client.playlistNextPage("pl-1", nextpage: "tok")
+        XCTAssertEqual(MockURLProtocol.requests[0].url?.host, "accounts.example")
+        XCTAssertEqual(MockURLProtocol.requests[1].url?.host, "accounts.example")
+        XCTAssertNil(MockURLProtocol.requests[0].value(forHTTPHeaderField: "Authorization"))
+        XCTAssertNil(MockURLProtocol.requests[1].value(forHTTPHeaderField: "Authorization"))
+    }
+
+    func testRegisterStoresTheIssuedSessionToken() async throws {
+        // verified in RegisterPage.vue: a successful register returns {token}
+        // and the frontend stores it exactly like a login
+        let store = InMemoryTokenStore()
+        let client = try makeClient(tokenStore: store) { request in
+            self.json(request.url!, self.fixtureData("login_OK_SYNTHETIC.json"))
+        }
+        let token = try await client.register(username: "olli", password: "hunter2")
+        XCTAssertEqual(token, "synthetic-token-0123456789abcdef")
+        XCTAssertEqual(store.token(for: baseURL), token)
+    }
+
+    func testRegisterRejectedWithA200ErrorBodyMapsToAuthenticationFailure() async throws {
+        let store = InMemoryTokenStore()
+        let client = try makeClient(tokenStore: store) { request in
+            self.json(request.url!, Data(#"{"error":"username taken"}"#.utf8))
+        }
+        await XCTAssertThrowsErrorAsync(try await client.register(username: "olli", password: "hunter2")) { error in
+            XCTAssertEqual(error as? PipedError, .authenticationFailure)
+        }
+        XCTAssertNil(store.token(for: baseURL))
+    }
+
+    func testPlaylistDescriptionUpdateUsesPatchLikeTheFrontend() async throws {
+        // verified in usePlaylists.js changePlaylistDescription: method PATCH
+        let store = InMemoryTokenStore()
+        store.put("tok-1", for: baseURL)
+        let client = try makeClient(tokenStore: store) { request in
+            self.json(request.url!, self.fixtureData("message_OK_SYNTHETIC.json"))
+        }
+        _ = try await client.updatePlaylistDescription("pl-1", description: "new description")
+        XCTAssertEqual(MockURLProtocol.requests[0].httpMethod, "PATCH")
+        XCTAssertEqual(MockURLProtocol.requests[0].url?.path, "/user/playlists/description")
+    }
+
     // ---------- error taxonomy ----------
 
     func testErrorTaxonomyMappings() async throws {

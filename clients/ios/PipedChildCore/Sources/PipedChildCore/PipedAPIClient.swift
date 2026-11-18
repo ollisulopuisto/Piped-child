@@ -214,13 +214,15 @@ public final class PipedAPIClient {
                        params: ["nextpage": nextpage])
     }
 
-    /// Playlist reads need NO auth header (verified in usePlaylists.js:85-94).
+    /// Playlist content reads come from the AUTH instance (verified in
+    /// usePlaylists.js getPlaylist: authApiUrl) but carry NO credentials, so
+    /// a user-created playlist resolves while nothing leaks.
     public func playlist(_ playlistId: String) async throws -> PlaylistResponse {
-        try await call(.get, "\(baseURL)/playlists/\(playlistId.pathSegment())")
+        try await call(.get, "\(authURL)/playlists/\(playlistId.pathSegment())")
     }
 
     public func playlistNextPage(_ playlistId: String, nextpage: String) async throws -> PlaylistResponse {
-        try await call(.get, "\(baseURL)/nextpage/playlists/\(playlistId.pathSegment())",
+        try await call(.get, "\(authURL)/nextpage/playlists/\(playlistId.pathSegment())",
                        params: ["nextpage": nextpage])
     }
 
@@ -244,10 +246,20 @@ public final class PipedAPIClient {
         throw PipedError.malformedResponse(detail: "/login returned no token")
     }
 
+    /// Registers and stores the issued session token under authURL
+    /// (verified in RegisterPage.vue: a successful register returns {token}
+    /// and the frontend stores it like a login). A 200 with `{"error": ...}`
+    /// is a rejection and maps to authenticationFailure.
     @discardableResult
-    public func register(username: String, password: String) async throws -> MessageResponse {
-        try await call(.post, "\(authURL)/register",
-                       body: LoginRequest(username: username, password: password))
+    public func register(username: String, password: String) async throws -> String {
+        let response: LoginResponse = try await call(.post, "\(authURL)/register",
+                                                     body: LoginRequest(username: username, password: password))
+        if let token = response.token {
+            tokenStore.put(token, for: authURL)
+            return token
+        }
+        if response.error != nil { throw PipedError.authenticationFailure }
+        throw PipedError.malformedResponse(detail: "/register returned no token")
     }
 
     /// Invalidates the session server-side and drops the local token.
@@ -326,7 +338,8 @@ public final class PipedAPIClient {
 
     @discardableResult
     public func updatePlaylistDescription(_ playlistId: String, description: String) async throws -> MessageResponse {
-        try await call(.post, "\(authURL)/user/playlists/description",
+        // verified in usePlaylists.js changePlaylistDescription: PATCH
+        try await call(.patch, "\(authURL)/user/playlists/description",
                        body: PlaylistDescriptionRequest(playlistId: playlistId, description: description), auth: true)
     }
 
@@ -347,6 +360,7 @@ public final class PipedAPIClient {
     private enum Method: String {
         case get = "GET"
         case post = "POST"
+        case patch = "PATCH"
     }
 
     private func call<T: Decodable>(
