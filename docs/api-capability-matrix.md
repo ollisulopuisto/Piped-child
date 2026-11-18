@@ -6,12 +6,18 @@ Piped OpenAPI spec (`TeamPiped/OpenAPI`) and the Piped-child frontend source.
 was inspected. Instance health changes daily; this matrix records both the
 contract and the observed reality.
 
+Caveats on the table below: every "yes" in the live-check column is a single
+author-observed call on 2026-11-18, not a re-run or an ongoing guarantee —
+time-stamped instance health goes stale within hours. Rows marked "no" were
+NOT tested live; their details come from the frontend source and the OpenAPI
+spec only, and must be treated as unverified until M1-B exercises them.
+
 ## Instance endpoints (bare paths, no `/api/v1` prefix)
 
 The frontend calls `apiUrl() + "/trending"` etc. The older `/api/v1` prefix
 returns 404 on current instances (verified on api.piped.private.coffee).
 
-| Endpoint | Method | Auth | Purpose | Verified 2026-11-18 | Notes |
+| Endpoint | Method | Auth | Purpose | Live check 2026-11-18 (author-observed) | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `/trending?region=XX` | GET | no | Region trending list | yes (200, private.coffee + ducks.party) | Cached; works even when extraction is blocked |
 | `/search?q=&filter=` | GET | no | Search (videos/channels/playlists) | yes (200) | filter: videos, channels, playlists, music_* |
@@ -34,7 +40,7 @@ returns 404 on current instances (verified on api.piped.private.coffee).
 | `/subscriptions` (+ `/unsubscribe`, `/subscribed`) | GET/POST | token | Subscription management | no | |
 | `/subscriptions/unauthenticated` | POST | no | Multi-channel unauth sub feed | no | |
 | `/user/playlists` (+ create/delete/rename/add/remove/description) | GET/POST | token | Playlist management | no | full CRUD exists |
-| `/playlists/{id}`, `/nextpage/playlists/{id}` | GET | token | Playlist content | no | |
+| `/playlists/{id}`, `/nextpage/playlists/{id}` | GET | token (per frontend source; NOT verified live) | Playlist content | no | |
 | `/import`, `/import/playlist` | POST | token | YouTube import | no | |
 | `/rss/playlists/{id}` | GET | token | Playlist RSS | no | |
 
