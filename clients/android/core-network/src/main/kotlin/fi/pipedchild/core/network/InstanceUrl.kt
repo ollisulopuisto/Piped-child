@@ -57,7 +57,10 @@ internal fun isPrivateOrLoopbackHost(host: String): Boolean {
     if (host == "localhost" || host.endsWith(".localhost") ||
         host.endsWith(".local") || host.endsWith(".internal")
     ) return true
-    if (host == "::1") return true
+    // URI.getHost() keeps the brackets of an IPv6 literal; classify the
+    // bracketed and unbracketed, compressed and expanded loopback spellings
+    val bare = host.removePrefix("[").removeSuffix("]")
+    if (bare == "::1" || bare == "0:0:0:0:0:0:0:1") return true
     val m = ipv4.matchEntire(host) ?: return false
     val octets = m.groupValues.drop(1).map { it.toInt() }
     if (octets.any { it > 255 }) return false

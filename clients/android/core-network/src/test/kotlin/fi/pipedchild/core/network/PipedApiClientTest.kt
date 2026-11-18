@@ -507,6 +507,10 @@ class InstanceUrlValidationTest {
         PipedApiClient("http://10.0.0.2")
         PipedApiClient("http://100.64.1.5:8080")
         PipedApiClient("http://nas.local")
+        // URI.getHost() keeps IPv6 brackets; compressed and expanded
+        // loopback spellings must both be recognized
+        PipedApiClient("http://[::1]:8080")
+        PipedApiClient("http://[0:0:0:0:0:0:0:1]")
     }
 
     @Test
@@ -515,6 +519,7 @@ class InstanceUrlValidationTest {
         // host would expose them on the wire
         assertFailsWith<IllegalArgumentException> { PipedApiClient("http://pipedapi.example.com") }
         assertFailsWith<IllegalArgumentException> { PipedApiClient("http://8.8.8.8") }
+        assertFailsWith<IllegalArgumentException> { PipedApiClient("http://[2001:db8::1]") }
     }
 
     @Test
