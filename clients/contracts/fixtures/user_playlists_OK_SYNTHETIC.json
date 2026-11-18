@@ -1,0 +1,15 @@
+[
+  {
+    "id": "synthetic-playlist-id-1",
+    "name": "Watch Later",
+    "shortDescription": null,
+    "thumbnail": "https://pipedproxy.example.com/playlist-thumb.jpg",
+    "videos": 3
+  },
+  {
+    "id": "synthetic-playlist-id-2",
+    "name": "Second list",
+    "shortDescription": "No thumbnail on this one.",
+    "videos": 0
+  }
+]

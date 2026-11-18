@@ -166,13 +166,28 @@ public enum SearchItem: Codable, Equatable {
         }
     }
 
+    private enum DiscriminatorKeys: String, CodingKey {
+        case type, url
+    }
+
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
+        // the item structs carry no `type`, so encode the discriminator into
+        // the same object; encoding the item through the same encoder merges
+        // its keys with ours (Foundation JSONEncoder shares the container)
+        var container = encoder.container(keyedBy: DiscriminatorKeys.self)
         switch self {
-        case .stream(let item): try container.encode(item)
-        case .channel(let item): try container.encode(item)
-        case .playlist(let item): try container.encode(item)
-        case .unknown(let url, let rawType): try container.encode(["url": url, "type": rawType])
+        case .stream(let item):
+            try container.encode("stream", forKey: .type)
+            try item.encode(to: encoder)
+        case .channel(let item):
+            try container.encode("channel", forKey: .type)
+            try item.encode(to: encoder)
+        case .playlist(let item):
+            try container.encode("playlist", forKey: .type)
+            try item.encode(to: encoder)
+        case .unknown(let url, let rawType):
+            try container.encode(rawType, forKey: .type)
+            try container.encode(url, forKey: .url)
         }
     }
 }

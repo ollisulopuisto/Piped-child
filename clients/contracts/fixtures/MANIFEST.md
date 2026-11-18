@@ -16,6 +16,13 @@ listed here with their derivation source.
 | streams_degraded_lbry_OK.json | GET /streams/dQw4w9WgXcQ | api.piped.private.coffee | 200 | DEGRADED: LBRY MP4 + LBRY HLS + 360p progressive |
 | streams_error_login_required.json | GET /streams/{trending video} | api.piped.private.coffee | 500 | YouTube bot-block body (`error`, `message`) |
 | lbry_hls_master.m3u8 | GET {LBRY HLS url from streams_degraded_lbry_OK.json} | proxy.piped.private.coffee | 200 | HLS v6 master playlist, 4 AVC variants 1080p/720p/360p/144p; the only real adaptive manifest recordable on 2026-11-18 |
+| channel_OK_SYNTHETIC.json | GET /channel/{id} (also /c/, /user/) | synthetic | n/a | invented values; shape from ChannelResponse as the frontend ChannelPage.vue uses it |
+| playlist_OK_SYNTHETIC.json | GET /playlists/{id} | synthetic | n/a | invented values; PlaylistResponse shape (description maps to playlistDescription) |
+| login_OK_SYNTHETIC.json | POST /login | synthetic | n/a | success body per LoginPage.vue (`{token}`); token value invented |
+| subscriptions_OK_SYNTHETIC.json | GET /subscriptions | synthetic | n/a | invented values; SubscriptionChannel rows (url keys the channel id) |
+| message_OK_SYNTHETIC.json | POST /logout, /subscribe, playlist management | synthetic | n/a | plain `{message}` success body, no `error` |
+| feed_OK_SYNTHETIC.json | GET /user/feed?authToken=... | synthetic | n/a | one StreamItem row, shape per the feed rendering in useSubscriptions.js |
+| user_playlists_OK_SYNTHETIC.json | GET /user/playlists | synthetic | n/a | two UserPlaylist rows, second without a thumbnail |
 
 Healthy `/streams` responses (dash/hls URLs, full adaptive videoStreams and
 audioStreams) could not be recorded on 2026-11-18: all reachable instances

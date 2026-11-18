@@ -57,13 +57,19 @@ func isPrivateOrLoopbackHost(_ host: String) -> Bool {
     if h == "localhost" || h.hasSuffix(".local") || h.hasSuffix(".internal") {
         return true
     }
-    // URL hosts may keep IPv6 brackets; classify bracketed/unbracketed and
-    // compressed/expanded loopback spellings
+    // URL hosts may keep IPv6 brackets; classify the bare address
     let bare = h.hasPrefix("[") && h.hasSuffix("]") ? String(h.dropFirst().dropLast()) : h
-    if bare == "::1" || bare == "0:0:0:0:0:0:0:1" {
-        return true
+    if bare.contains(":") {
+        return isPrivateIPv6(bare)
     }
-    let parts = h.split(separator: ".").compactMap { Int($0) }
+    // strict dotted-quad: compactMap on Int($0) would drop non-numeric
+    // labels and misclassify "10.1.2.3.example.com" as private (CWE-319),
+    // so every label must be numeric first
+    let labels = h.split(separator: ".", omittingEmptySubsequences: false)
+    guard labels.count == 4,
+          labels.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isNumber }) })
+    else { return false }
+    let parts = labels.compactMap { Int($0) }
     guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
     switch parts[0] {
     case 10, 127: return true
@@ -73,6 +79,49 @@ func isPrivateOrLoopbackHost(_ host: String) -> Bool {
     case 100: return (64...127).contains(parts[1]) // CGNAT / tailnet range
     default: return false
     }
+}
+
+/// Loopback (::1), unique-local fc00::/7 (the tailnet ULA prefix is in
+/// here) and link-local fe80::/10 (never leaves the link). Zone ids
+/// (fe80::1%eth0) are rejected: no verified LAN config uses them.
+private func isPrivateIPv6(_ bare: String) -> Bool {
+    guard let b = ipv6Bytes(bare) else { return false }
+    if b.prefix(15).allSatisfy({ $0 == 0 }) && b[15] == 1 { return true } // ::1
+    if (b[0] & 0xfe) == 0xfc { return true } // fc00::/7 unique-local
+    if b[0] == 0xfe && (b[1] & 0xc0) == 0x80 { return true } // fe80::/10 link-local
+    return false
+}
+
+/// Parses an IPv6 literal (compressed or full) into 16 bytes; nil when the
+/// input is not a pure IPv6 literal (embedded IPv4 tails and zone ids are
+/// not accepted: no verified LAN config needs them).
+private func ipv6Bytes(_ s: String) -> [UInt8]? {
+    if s.contains("%") || s.contains(".") { return nil }
+    let halves = s.components(separatedBy: "::")
+    guard halves.count <= 2 else { return nil }
+    func groups(_ part: String) -> [UInt16]? {
+        if part.isEmpty { return [] }
+        var out: [UInt16] = []
+        for g in part.split(separator: ":", omittingEmptySubsequences: false) {
+            guard (1...4).contains(g.count),
+                  g.allSatisfy({ $0.isHexDigit }),
+                  let v = UInt16(g, radix: 16) else { return nil }
+            out.append(v)
+        }
+        return out
+    }
+    guard let head = groups(halves[0]) else { return nil }
+    var full: [UInt16]
+    if halves.count == 2 {
+        guard let tail = groups(halves[1]) else { return nil }
+        let missing = 8 - head.count - tail.count
+        guard missing >= 1 else { return nil }
+        full = head + Array(repeating: 0, count: missing) + tail
+    } else {
+        guard head.count == 8 else { return nil }
+        full = head
+    }
+    return full.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xff)] }
 }
 
 /// Normalizes and validates a Piped instance base URL, mirroring the Android
@@ -201,7 +250,14 @@ public final class PipedAPIClient {
     /// OpenSearch suggestions: the response is `["query", ["suggestion", ...]]`.
     public func suggestions(query: String) async throws -> [String] {
         let data = try await rawCall(.get, "\(baseURL)/opensearch/suggestions", params: ["query": query])
-        let parsed = try JSONSerialization.jsonObject(with: data)
+        // map JSONSerialization failures into the taxonomy; rawCall errors
+        // propagate unchanged
+        let parsed: Any
+        do {
+            parsed = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw PipedError.malformedResponse(detail: "opensearch response is not valid JSON")
+        }
         guard let arr = parsed as? [Any], arr.count >= 2, let suggestions = arr[1] as? [String] else {
             throw PipedError.malformedResponse(detail: "opensearch array has unexpected shape")
         }

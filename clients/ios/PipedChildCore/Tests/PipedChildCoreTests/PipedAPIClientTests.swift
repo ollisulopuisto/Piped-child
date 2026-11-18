@@ -159,11 +159,58 @@ final class PipedAPIClientTests: XCTestCase {
         XCTAssertEqual(decoded, nasty)
     }
 
+    // ---------- SearchItem discriminator round-trip ----------
+
+    func testSearchItemRoundTripKeepsTheTypeDiscriminator() throws {
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        let cases: [SearchItem] = [
+            .stream(SearchItem.StreamSearchItem(
+                url: "/watch?v=abc", title: "t", thumbnail: nil, uploaderName: nil,
+                uploaderUrl: nil, duration: nil, views: nil, uploadedDate: nil,
+                uploaded: nil, uploaderVerified: nil, isShort: nil)),
+            .channel(SearchItem.ChannelSearchItem(
+                url: "/channel/UC1", name: "c", thumbnail: nil, itemDescription: nil,
+                subscribers: nil, videos: nil, verified: nil)),
+            .playlist(SearchItem.PlaylistSearchItem(
+                url: "/playlist?list=p1", name: "p", thumbnail: nil, uploaderName: nil,
+                uploaderUrl: nil, uploaderVerified: nil, videos: nil, itemDescription: nil)),
+            .unknown(url: "/x", rawType: "some-future-type"),
+        ]
+        for item in cases {
+            let roundTripped = try decoder.decode(SearchItem.self, from: encoder.encode(item))
+            XCTAssertEqual(roundTripped, item, "round-trip must not lose the type discriminator")
+        }
+    }
+
+    // ---------- suggestions error mapping ----------
+
+    func testSuggestionsInvalidJSONMapsToMalformedResponse() async throws {
+        let client = try makeClient { request in
+            self.json(request.url!, Data("not json".utf8))
+        }
+        await XCTAssertThrowsErrorAsync(try await client.suggestions(query: "lofi")) { error in
+            guard case PipedError.malformedResponse = error else {
+                return XCTFail("expected malformedResponse, got \(error)")
+            }
+        }
+    }
+
+    func testSuggestionsWrongShapeMapsToMalformedResponse() async throws {
+        let client = try makeClient { request in
+            self.json(request.url!, Data(#"{"unexpected":1}"#.utf8))
+        }
+        await XCTAssertThrowsErrorAsync(try await client.suggestions(query: "lofi")) { error in
+            guard case PipedError.malformedResponse = error else {
+                return XCTFail("expected malformedResponse, got \(error)")
+            }
+        }
+    }
+
     func testDearrowMapsVideoIdsToEntries() async throws {
         let client = try makeClient { request in
             self.json(request.url!, self.fixtureData("dearrow_OK.json"))
-        }
-        let response = try await client.dearrow(videoIds: ["dQw4w9WgXcQ"])
+        }        let response = try await client.dearrow(videoIds: ["dQw4w9WgXcQ"])
         XCTAssertNotNil(response["dQw4w9WgXcQ"])
     }
 
@@ -434,6 +481,12 @@ final class PipedAPIClientTests: XCTestCase {
         XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://pipedapi.example.com"))
         XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://8.8.8.8"))
         XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://[2001:db8::1]"))
+        // a hostname that starts with a private-looking dotted prefix is
+        // still public: every label must be numeric (CWE-319)
+        XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://10.1.2.3.example.com"))
+        // private IPv6: tailnet ULA (fc00::/7) and link-local keep working
+        _ = try PipedAPIClient(baseURL: "http://[fd7a:115c:a1e0::1]:8080")
+        _ = try PipedAPIClient(baseURL: "http://[fe80::1]")
     }
 }
 
@@ -450,13 +503,15 @@ final class TokenIsolationTests: XCTestCase {
             )!
             return (response, Data("[]".utf8))
         }
-        MockURLProtocol.requests = []
+        // requests is NOT reset here: a test with two clients must see both
+        // clients' requests. Each test that needs a clean slate resets it.
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
         return try PipedAPIClient(baseURL: url, tokenStore: store, configuration: config)
     }
 
     func testATokenIsNeverSentToAnInstanceItWasNotIssuedBy() async throws {
+        MockURLProtocol.requests = []
         let store = InMemoryTokenStore()
         store.put("token-for-a", for: "https://instance-a.example.com")
         let clientB = try makeClient(url: "https://instance-b.example.com", store: store)
@@ -467,6 +522,7 @@ final class TokenIsolationTests: XCTestCase {
     }
 
     func testTwoClientsOnDifferentInstancesShareAStoreWithoutLeaking() async throws {
+        MockURLProtocol.requests = []
         let store = InMemoryTokenStore()
         store.put("token-for-a", for: "https://instance-a.example.com")
         store.put("token-for-b", for: "https://instance-b.example.com")

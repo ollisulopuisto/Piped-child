@@ -1,0 +1,28 @@
+{
+  "id": "UCXuqSBlHAE6Xw-yeJA0Tunw",
+  "name": "Linus Tech Tips",
+  "avatarUrl": "https://pipedproxy.example.com/avatar.jpg",
+  "bannerUrl": null,
+  "description": "Synthetic channel for contract tests. Field shapes follow the frontend ChannelPage.vue usage; values are invented.",
+  "subscriberCount": 15000000,
+  "verified": true,
+  "nextpage": "synthetic-nextpage-token-1",
+  "relatedStreams": [
+    {
+      "url": "/watch?v=syntheticVid1",
+      "type": "stream",
+      "title": "Synthetic upload one",
+      "thumbnail": "https://pipedproxy.example.com/thumb1.jpg",
+      "uploaderName": "Linus Tech Tips",
+      "uploaderUrl": "/channel/UCXuqSBlHAE6Xw-yeJA0Tunw",
+      "uploaderAvatar": "https://pipedproxy.example.com/avatar.jpg",
+      "uploadedDate": "2 days ago",
+      "uploaded": 1763308800000,
+      "duration": 612,
+      "views": 123456,
+      "uploaderVerified": true,
+      "shortDescription": "Synthetic video description.",
+      "isShort": false
+    }
+  ]
+}

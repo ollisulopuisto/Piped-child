@@ -1,0 +1,43 @@
+{
+  "name": "Synthetic playlist",
+  "description": "Synthetic playlist for contract tests; values are invented.",
+  "uploader": "olli",
+  "uploaderUrl": "/user/olli",
+  "uploaderAvatar": null,
+  "videos": 2,
+  "nextpage": null,
+  "relatedStreams": [
+    {
+      "url": "/watch?v=syntheticVid1",
+      "type": "stream",
+      "title": "Synthetic upload one",
+      "thumbnail": "https://pipedproxy.example.com/thumb1.jpg",
+      "uploaderName": "Linus Tech Tips",
+      "uploaderUrl": "/channel/UCXuqSBlHAE6Xw-yeJA0Tunw",
+      "uploaderAvatar": null,
+      "uploadedDate": "2 days ago",
+      "uploaded": 1763308800000,
+      "duration": 612,
+      "views": 123456,
+      "uploaderVerified": true,
+      "shortDescription": null,
+      "isShort": false
+    },
+    {
+      "url": "/watch?v=syntheticVid2",
+      "type": "stream",
+      "title": "Synthetic upload two",
+      "thumbnail": "https://pipedproxy.example.com/thumb2.jpg",
+      "uploaderName": "Another Uploader",
+      "uploaderUrl": "/channel/UCsynthetic2",
+      "uploaderAvatar": null,
+      "uploadedDate": "1 week ago",
+      "uploaded": 1762704000000,
+      "duration": 95,
+      "views": 42,
+      "uploaderVerified": false,
+      "shortDescription": null,
+      "isShort": true
+    }
+  ]
+}
