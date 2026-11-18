@@ -35,7 +35,13 @@
             <i-fa6-solid-magnifying-glass />
         </button>
         <!-- three vertical lines for toggling the hamburger menu on mobile -->
-        <button class="mr-3 flex flex-col justify-end md:hidden" @click="showTopNav = !showTopNav">
+        <button
+            type="button"
+            class="mr-3 flex flex-col justify-end md:hidden"
+            :aria-label="$t('actions.toggle_navigation')"
+            :aria-expanded="showTopNav"
+            @click="showTopNav = !showTopNav"
+        >
             <span class="my-[0.1125rem] rounded-xl bg-dark-900 px-2.5 py-px dark:bg-white"></span>
             <span class="my-[0.1125rem] rounded-xl bg-dark-900 px-2.5 py-px dark:bg-white"></span>
             <span class="my-[0.1125rem] rounded-xl bg-dark-900 px-2.5 py-px dark:bg-white"></span>
