@@ -1,0 +1,16 @@
+[
+  {
+    "id": "synthetic-playlist-id-1",
+    "name": "Watch Later",
+    "shortDescription": "Synthetic user playlist.",
+    "thumbnail": "https://piped-proxy.example/vi/syntheticVid1/hq720.jpg?host=i.ytimg.com",
+    "videos": 2
+  },
+  {
+    "id": "synthetic-playlist-id-2",
+    "name": "Empty playlist",
+    "shortDescription": null,
+    "thumbnail": null,
+    "videos": 0
+  }
+]

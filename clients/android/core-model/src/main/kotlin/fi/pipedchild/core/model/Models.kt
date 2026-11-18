@@ -276,5 +276,102 @@ data class ApiErrorBody(
 @Serializable
 data class LoginRequest(val username: String, val password: String)
 
+/** 200 with `{"error": ...}` is how a rejected login comes back (LoginPage.vue). */
 @Serializable
-data class LoginResponse(val token: String? = null)
+data class LoginResponse(val token: String? = null, val error: String? = null)
+
+@Serializable
+data class ChannelResponse(
+    val id: String? = null,
+    val name: String? = null,
+    val avatarUrl: String? = null,
+    val bannerUrl: String? = null,
+    val description: String? = null,
+    val subscriberCount: Long = 0,
+    val verified: Boolean = false,
+    val nextpage: String? = null,
+    val relatedStreams: List<StreamItem> = emptyList(),
+)
+
+@Serializable
+data class PlaylistResponse(
+    val name: String? = null,
+    val description: String? = null,
+    val uploader: String? = null,
+    val uploaderUrl: String? = null,
+    val uploaderAvatar: String? = null,
+    val videos: Long = 0,
+    val nextpage: String? = null,
+    val relatedStreams: List<StreamItem> = emptyList(),
+)
+
+@Serializable
+data class UserPlaylist(
+    val id: String,
+    val name: String,
+    val shortDescription: String? = null,
+    val thumbnail: String? = null,
+    val videos: Long = 0,
+)
+
+/** One row of GET /subscriptions. The frontend keys on `url`
+ *  ("/channel/UC..."); the channel id is its last path segment. */
+@Serializable
+data class SubscriptionChannel(
+    val url: String,
+    val name: String,
+    val avatar: String? = null,
+    val verified: Boolean = false,
+) {
+    val channelId: String
+        get() = url.substringAfterLast("/")
+}
+
+@Serializable
+data class SubscribedResponse(val subscribed: Boolean = false)
+
+/** Success body of /logout, /subscribe, /unsubscribe and the user-playlist endpoints. */
+@Serializable
+data class MessageResponse(
+    val message: String? = null,
+    val error: String? = null,
+)
+
+/** GET /config. The frontend reads these four fields; the rest are ignored. */
+@Serializable
+data class InstanceConfig(
+    val version: String? = null,
+    val donationUrl: String? = null,
+    val statusPageUrl: String? = null,
+    val privacyPolicyUrl: String? = null,
+)
+
+@Serializable
+data class CreatePlaylistResponse(val playlistId: String? = null)
+
+@Serializable
+data class RegisterRequest(val username: String, val password: String)
+
+@Serializable
+data class DeleteAccountRequest(val password: String)
+
+@Serializable
+data class SubscribeRequest(val channelId: String)
+
+@Serializable
+data class CreatePlaylistRequest(val name: String)
+
+@Serializable
+data class DeletePlaylistRequest(val playlistId: String)
+
+@Serializable
+data class RenamePlaylistRequest(val playlistId: String, val newName: String)
+
+@Serializable
+data class PlaylistDescriptionRequest(val playlistId: String, val description: String)
+
+@Serializable
+data class AddToPlaylistRequest(val playlistId: String, val videoIds: List<String>)
+
+@Serializable
+data class RemoveFromPlaylistRequest(val playlistId: String, val index: Int)

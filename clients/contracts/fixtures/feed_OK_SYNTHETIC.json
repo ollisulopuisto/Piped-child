@@ -1,0 +1,18 @@
+[
+  {
+    "url": "/watch?v=syntheticFeed1",
+    "type": "stream",
+    "title": "Synthetic feed video",
+    "thumbnail": "https://piped-proxy.example/vi/syntheticFeed1/hq720.jpg?host=i.ytimg.com",
+    "uploaderName": "Linus Tech Tips",
+    "uploaderUrl": "/channel/UCXuqSBlHAE6Xw-yeJA0Tunw",
+    "uploaderAvatar": "https://piped-proxy.example/avatar.jpg?host=yt3.ggpht.com",
+    "uploadedDate": "3 hours ago",
+    "shortDescription": "Synthetic feed item.",
+    "duration": 900,
+    "views": 100,
+    "uploaded": 1763500000000,
+    "uploaderVerified": true,
+    "isShort": false
+  }
+]

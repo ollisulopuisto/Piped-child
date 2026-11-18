@@ -1,0 +1,43 @@
+{
+  "name": "Synthetic playlist",
+  "description": "Synthetic fixture derived from PlaylistPage.vue field usage.",
+  "uploader": "Linus Tech Tips",
+  "uploaderUrl": "/channel/UCXuqSBlHAE6Xw-yeJA0Tunw",
+  "uploaderAvatar": "https://piped-proxy.example/avatar.jpg?host=yt3.ggpht.com",
+  "videos": 2,
+  "nextpage": "synthetic-playlist-next-token",
+  "relatedStreams": [
+    {
+      "url": "/watch?v=syntheticVid1",
+      "type": "stream",
+      "title": "Synthetic playlist video 1",
+      "thumbnail": "https://piped-proxy.example/vi/syntheticVid1/hq720.jpg?host=i.ytimg.com",
+      "uploaderName": "Linus Tech Tips",
+      "uploaderUrl": "/channel/UCXuqSBlHAE6Xw-yeJA0Tunw",
+      "uploaderAvatar": "https://piped-proxy.example/avatar.jpg?host=yt3.ggpht.com",
+      "uploadedDate": "2 days ago",
+      "shortDescription": "Synthetic description.",
+      "duration": 612,
+      "views": 1234567,
+      "uploaded": 1763300000000,
+      "uploaderVerified": true,
+      "isShort": false
+    },
+    {
+      "url": "/watch?v=syntheticVid2",
+      "type": "stream",
+      "title": "Synthetic playlist video 2",
+      "thumbnail": "https://piped-proxy.example/vi/syntheticVid2/hq720.jpg?host=i.ytimg.com",
+      "uploaderName": "Linus Tech Tips",
+      "uploaderUrl": "/channel/UCXuqSBlHAE6Xw-yeJA0Tunw",
+      "uploaderAvatar": "https://piped-proxy.example/avatar.jpg?host=yt3.ggpht.com",
+      "uploadedDate": "1 day ago",
+      "shortDescription": "Synthetic description 2.",
+      "duration": 300,
+      "views": 42,
+      "uploaded": 1763400000000,
+      "uploaderVerified": false,
+      "isShort": false
+    }
+  ]
+}
