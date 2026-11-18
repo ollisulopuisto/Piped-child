@@ -1,9 +1,10 @@
 # Piped-child Native Clients — Architecture (M0)
 
-Status: M0 audit complete. Date: 2026-11-18.
+Status: M0 audit complete, revised per owner review (D1, 2026-11-18).
 Spec: owner's handoff "Native Android TV, Android Tablet & iOS Clients"
-(2026-11-18). This document covers §4 (mandatory repository investigation),
-M0 deliverables, and the integration decisions the milestones depend on.
+(2026-11-18) plus owner review feedback. This document covers §4 (mandatory
+repository investigation), M0 deliverables, and the integration decisions
+the milestones depend on.
 
 ## 1. What Piped-child actually is
 
@@ -58,27 +59,28 @@ verification results.
 
 ## 3. Platform compatibility risks (verified, ranked)
 
-1. **/streams fragility (high, current).** Tonight all reachable public
-   instances fail extraction on recent videos (YouTube bot-blocking instance
-   IPs; `LOGIN_REQUIRED` / 500). Discovery endpoints still work. Clients must
-   treat this as actionable ("instance blocked — retry / switch instance"),
-   never a crash (spec §15.8). Playback-only failover to a user-configured
-   fallback list is recommended in M1, token-safe per spec §10.
+1. **/streams fragility (high, current).** On 2026-11-18 all reachable public
+   instances failed extraction on recent videos (YouTube bot-blocking
+   instance IPs; `LOGIN_REQUIRED` / 500). Discovery endpoints still worked.
+   Clients must treat this as actionable ("instance blocked — retry / switch
+   instance"), never a crash (spec §15.8). M1-A (playback-first) exists to
+   pin down exactly how bad this is and what survives it.
 2. **iOS format constraint (structural, spec §8).** AVPlayer plays HLS and
    progressive MP4, not DASH. When an instance returns `hls: null` (common
    when degraded), iOS falls back to progressive streams (often only 360p
-   under bot-block). The web client's DASH-generation trick is not portable.
-   Fallback order: `hls` → progressive MP4 (muxed, `videoOnly: false`) →
-   actionable error. No server-side transcoding (spec). This is a documented
-   limitation, not a defect.
+   under bot-block). The web client's DASH-generation trick is not portable
+   to AVPlayer. Fallback order: `hls` → progressive MP4 (muxed,
+   `videoOnly: false`) → actionable error. No server-side transcoding (spec).
+   Verified in M1-A, not assumed.
 3. **Instance variance (medium).** Path layout differs (no `/api/v1`),
    Cloudflare challenges on some instances (leptons.xyz), broken entries in
    the official list (adminforge). Instance connectivity validation is P0 —
    validate with `/trending?region=US` (cheap, cached) and surface
    per-endpoint failures separately.
-4. **Chromecast 4K decode (low).** ExoPlayer/Media3 handles VP9/H.264/AV1
-   with hardware decode; verify 4K VP9 profile support on-device in M2
-   validation. Do not claim hardware playback from simulator tests (§12).
+4. **Chromecast 4K decode (unverified).** ExoPlayer/Media3 should handle
+   VP9/H.264/AV1 with hardware decode; must be validated on the actual
+   Chromecast with Google TV 4K in M2 — simulator results do not establish
+   device compatibility (spec §12). No hardware claims until then.
 5. **Auth token semantics (medium).** Tokens are per-instance opaque strings
    with server-side expiry; 401 handling and explicit re-login required.
    Instance switching must never carry a token to a different host (§10).
@@ -100,7 +102,7 @@ Piped-child/
 │   │   ├── core-data/         # repositories, caching, settings store
 │   │   ├── core-player/       # Media3 wrapper, SponsorBlock skip engine
 │   │   ├── core-model/        # shared data models (from contracts)
-│   │   └── feature/{home,search,subscriptions,playlists,player,settings,gate}/
+│   │   └── feature/{home,search,subscriptions,playlists,player,settings}/
 │   ├── ios/
 │   │   ├── PipedChild/        # SwiftUI app
 │   │   ├── Networking/ Models/ Features/ Player/
@@ -123,71 +125,106 @@ TV and tablet share core-* modules but not screens (spec §3): d-pad focus
 model and touch layouts are different designs. The tablet app is the
 touch-first one; Android phones are out of scope unless reuse is free (§2).
 
-## 5. ChoreKeeper screen-time gate (owner requirement for the TV client)
+## 5. ChoreKeeper — PROPOSED optional integration (unconfirmed)
 
-Owner's standing condition (2026-11-18): the TV client ships with the
-ChoreKeeper screen-time hook. ChoreKeeper (family server, private repo)
-already provides the full API: screen targets (priced per activity,
-per-child, `requires_approval`, grace), sessions
-(`POST /api/screen/sessions`, poll `/api/screen/sessions/current`, stop with
-refund), parent approval via signed ntfy links, server-kept clock with
-`ends_at`/`locks_at`.
+ChoreKeeper is the family's private chore/screen-time server. It exposes a
+REST API with a per-child "screen-time bank" and a screen-session concept
+(request minutes on a named target, server keeps the clock, session carries
+`ends_at`/`locks_at`, unused minutes refundable, optional parent approval).
 
-Design (defaults accepted by owner 2026-11-18):
-- TV app signs in to ChoreKeeper as the child; QR device-pairing link
-  generated in the ChoreKeeper admin UI (small backend delta, its only one).
-- Profile picker at launch when more than one child exists.
-- Play press → affordable-minutes check → session request (or approval wait
-  screen) → playback locked to `locks_at` locally (server remains the clock;
-  a mid-session network drop still locks on time — fail-closed) → stop
-  refunds unused minutes.
-- Gate is a self-contained module (`feature/gate` on Android, one Swift
-  package on iOS) wired only into the playback entry point. Browsing stays
-  free. The gate is TV-first per owner requirement; tablet/iOS get it when
-  the owner asks — it is out of the handoff's P0.
-- ChoreKeeper server URL is an app setting; the HA API key is never used
-  (read-only by design there).
+**What is confirmed by the owner (2026-11-18):**
+
+- The Chromecast sits on the home Wi-Fi; the home router is in Tailscale.
+- The owner wants the Android TV app to be ABLE to reach the ChoreKeeper
+  server. Network path: Chromecast → home Wi-Fi → home router → Tailscale
+  routing → ChoreKeeper server. The router being in the tailnet does NOT
+  guarantee LAN-to-tailnet routing works — that must be tested, not assumed.
+  The Chromecast does not necessarily need its own Tailscale client.
+
+**What is NOT confirmed:** mandatory enforcement, child profile selection at
+startup, ChoreKeeper authentication or QR pairing, parent approval flow,
+fail-closed playback, session/refund semantics. Nothing in this section is a
+commitment.
+
+**Design constraints if it is ever built:**
+
+- A separate, isolated module behind its own interface
+  (`feature/chorekeeper` on Android, one Swift package on iOS). The playback
+  engine has NO dependency on it; the client is fully functional without it
+  unless an explicitly enabled policy requires otherwise.
+- Configurable ChoreKeeper server URL in settings. Errors must distinguish
+  routing failure (server unreachable), authentication failure, and API
+  errors — never a generic spinner.
+- No changes to the ChoreKeeper backend are part of this project.
+- No account data flows to ChoreKeeper; the integration would be disclosed
+  on the first-run endpoint screen like every other connection.
 
 ## 6. Privacy and security rules (binding on all clients)
 
 - First-run consent screen lists every endpoint the app will contact BEFORE
-  the first request: chosen Piped instance (+ proxy host), ChoreKeeper
-  server, and nothing else. SponsorBlock/DeArrow ride the instance proxy.
-  No analytics, no ad SDKs, no Google sign-in (spec §8/§15.10).
+  the first request: chosen Piped instance (+ proxy host), and any optional
+  integration the user enables. SponsorBlock/DeArrow ride the instance
+  proxy. No analytics, no ad SDKs, no Google sign-in (spec §8/§15.10).
 - Credentials: Android = EncryptedSharedPrefs/Keystore; iOS = Keychain.
-  No token logging. Instance switch never migrates tokens.
+  No token logging. Instance switch never migrates tokens. Fallback
+  instances never receive an auth token without explicit user authorization.
 - No telemetry. Error reports stay on-device unless the owner asks.
 
-## 7. Implementation plan (mapped to spec milestones)
+## 7. Implementation plan (playback-first, per owner review)
 
-- M0 (this): docs/architecture.md + docs/api-capability-matrix.md. ✔
-- M1 contracts + networking: `contracts/api` shapes from the OpenAPI spec,
-  fixtures recorded from a healthy instance (need one reachable day — the
-  matrix notes which), Kotlin + Swift clients, instance validation,
-  auth token store, playback-only failover design. Failing-first tests per
-  repo rules.
-- M2 Android TV slice: home/search/subscriptions/player per the approved
-  sketches (2026-11-18), d-pad only, LEANBACK_LAUNCHER, gate module
-  included. Validate on his Chromecast with Google TV 4K.
-- M3 tablet (adaptive, PiP), M4 iPhone (SwiftUI, AVPlayer, HLS constraint
-  documented), M5 parity (P0 completion + prioritized P1: SponsorBlock
-  categories, DeArrow, speed, background audio, PiP, queue), M6 release
-  readiness (CI per platform, install docs, limitations).
-- CI (spec §13): separate workflows per platform, manual/tag triggers for
-  builds (owner's GitHub-minutes rule), PR-time unit tests + lint only.
+### M1-A — Playback feasibility (highest priority, precedes broad M1)
+
+- Find a working Piped instance or configure a test instance; retrieve real
+  `/streams/{videoId}` responses; record healthy AND degraded sanitized
+  fixtures.
+- Minimal Android Media3 harness and minimal iOS AVPlayer harness; verify
+  both play a verified real video. Determine whether Media3 can
+  consume/construct DASH from Piped stream metadata (the web frontend's
+  DashUtils approach). iOS: HLS first, then compatible progressive MP4; no
+  silent server-side transcoding.
+- Test matrix: ordinary video, separate audio+video streams, subtitles,
+  unavailable/blocked video, HLS when available, 1080p/4K when available.
+- Acceptance: Android plays a verified real video; iOS plays a verified
+  real video; deterministic, tested stream selection; actionable errors for
+  incompatible formats; extraction failures distinguished from network
+  failures; automated tests over recorded fixtures on both platforms;
+  hardware limits documented. Simulator-only results do not establish
+  Chromecast/iPhone compatibility. If live playback cannot be established,
+  report the blocker and alternatives before building further.
+
+### M1-B — Networking and models (after M1-A reports)
+
+- API models, Kotlin + Swift networking, configurable instance, auth with
+  secure token storage, per-instance credential isolation, pagination,
+  search/metadata, typed errors, shared fixtures, unit + integration tests.
+- Failover only if necessary and proven to help: user-configured fallback
+  instances, bounded retries, no credential leakage, no silent account
+  switching, clear errors. No elaborate routing machinery before evidence.
+
+### M2–M6
+
+- M2 Android TV (Compose for TV, Media3, d-pad, validated on the Chromecast
+  with Google TV 4K; ChoreKeeper only as the isolated optional module if the
+  owner confirms it by then), M3 Tablet, M4 iPhone (SwiftUI, AVPlayer,
+  background audio, PiP, AirPlay), M5 feature parity, M6 release readiness.
+- CI (spec §13): separate workflows per platform; light checks on PR,
+  expensive builds manual/release-only (owner's GitHub-minutes rule).
   iOS needs a macOS runner only for manual build jobs.
+- Each milestone: TDD, incremental reviewable PR, adversarial review, no
+  hardware claims without hardware.
 
 ## 8. Open questions for the owner
 
 1. Apple Developer account? TestFlight/device signing needs the paid
    program; otherwise 7-day re-sign sideload (documented in M6 either way).
-2. Self-host a Piped backend instance for family use? It removes the biggest
-   risk (risk #1) and keeps tokens in-house. Backend is upstream-supported,
-   not in this repo's scope either way.
-3. Default instance for the clients until then (kavin.rocks is the web
-   default but was unreachable tonight).
-4. Confirm repo write path: PAT previously lacked PR write on Piped-child
-   (2026-11-10); needs re-test before M1's first PR.
-5. Minimum Android API level: propose API 26 (covers Chromecast 4K on
-   Android 12 and most tablets from ~2017); confirm older-tablet target if
-   one specific device matters.
+   (Working default: no paid account.)
+2. Self-host a Piped backend instance for family use? NOTE: self-hosting
+   does NOT by itself fix YouTube IP blocking — a home-hosted instance still
+   extracts from YouTube and its IP can be blocked the same way. It helps
+   only with instance availability/trust, not extraction reliability.
+   (Working default: evaluate during M1-A if no public instance is usable.)
+3. Default instance for the clients (kavin.rocks is the web default but was
+   unreachable tonight).
+4. Minimum Android API level: propose API 26 (covers Chromecast 4K on
+   Android 12 and most tablets from ~2017); confirm if a specific older
+   tablet matters. (Working default: API 26.)

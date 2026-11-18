@@ -82,5 +82,8 @@ Consequences for the clients:
    NOT for AVPlayer. iOS fallback ordering: `hls` → progressive MP4 →
    actionable error. When instance IPs are blocked, iOS is the first platform
    to lose quality. Documented limitation per spec §8.
-4. Self-hosting the backend (supported upstream, docs.piped.video) would take
-   the family off the public-instance lottery. Open question for the owner.
+4. Self-hosting the backend (supported upstream, docs.piped.video) would
+   take the family off public-instance AVAILABILITY — but it does not fix
+   extraction blocking: a self-hosted instance still asks YouTube from its
+   own IP and can be bot-blocked the same way. Open question for the owner;
+   decide after M1-A's playback feasibility results.
