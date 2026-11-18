@@ -41,11 +41,32 @@ public final class InMemoryTokenStore: TokenStore, @unchecked Sendable {
 }
 
 public enum InstanceURLError: Error, Equatable {
-    case notParseable(String)
-    case badScheme(String)
-    case missingHost(String)
-    case containsCredentials(String)
-    case containsPathQueryOrFragment(String)
+    case notParseable
+    case badScheme
+    case missingHost
+    case containsCredentials
+    case containsPathQueryOrFragment
+}
+
+/// http is accepted only for private/loopback hosts: credentials and tokens
+/// are sent to the instance, so plain http to a public host would expose
+/// them on the wire. Private ranges keep self-hosted LAN/tailnet instances
+/// working.
+func isPrivateOrLoopbackHost(_ host: String) -> Bool {
+    let h = host.lowercased()
+    if h == "localhost" || h.hasSuffix(".local") || h.hasSuffix(".internal") || h == "::1" || h == "[::1]" {
+        return true
+    }
+    let parts = h.split(separator: ".").compactMap { Int($0) }
+    guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+    switch parts[0] {
+    case 10, 127: return true
+    case 192: return parts[1] == 168
+    case 172: return (16...31).contains(parts[1])
+    case 169: return parts[1] == 254
+    case 100: return (64...127).contains(parts[1]) // CGNAT / tailnet range
+    default: return false
+    }
 }
 
 /// Normalizes and validates a Piped instance base URL, mirroring the Android
@@ -58,20 +79,25 @@ enum InstanceURL {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         guard let components = URLComponents(string: trimmed),
               let scheme = components.scheme?.lowercased() else {
-            throw InstanceURLError.notParseable(raw)
+            throw InstanceURLError.notParseable
         }
         guard scheme == "https" || scheme == "http" else {
-            throw InstanceURLError.badScheme(raw)
+            throw InstanceURLError.badScheme
         }
         guard let host = components.host, !host.isEmpty else {
-            throw InstanceURLError.missingHost(raw)
+            throw InstanceURLError.missingHost
+        }
+        // errors carry no raw input: an attacker-controlled URL should not
+        // flow back into logs or UI verbatim
+        guard scheme == "https" || isPrivateOrLoopbackHost(host) else {
+            throw InstanceURLError.badScheme
         }
         guard components.user == nil, components.password == nil else {
-            throw InstanceURLError.containsCredentials(raw)
+            throw InstanceURLError.containsCredentials
         }
         let path = components.path
         guard (path.isEmpty || path == "/"), components.query == nil, components.fragment == nil else {
-            throw InstanceURLError.containsPathQueryOrFragment(raw)
+            throw InstanceURLError.containsPathQueryOrFragment
         }
         let port = components.port.map { ":\($0)" } ?? ""
         return "\(scheme)://\(host.lowercased())\(port)"
@@ -450,8 +476,12 @@ public final class PipedAPIClient {
 extension String {
     /// Encodes one dynamic path segment so an id cannot break out of its
     /// path position ("/", "?", "#"). urlPathAllowed keeps "/", so it is
-    /// removed explicitly.
+    /// removed explicitly. "."/".." survive percent-encoding, so they are
+    /// rejected outright.
     func pathSegment() -> String {
+        // mirrors the Kotlin require(): "."/".." survive percent-encoding,
+        // so they are a programmer error, not a runtime error to surface
+        precondition(self != "." && self != ".." && !isEmpty, "invalid id segment")
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/")
         return addingPercentEncoding(withAllowedCharacters: allowed) ?? self

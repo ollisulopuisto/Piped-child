@@ -147,6 +147,18 @@ final class PipedAPIClientTests: XCTestCase {
         XCTAssertEqual(query(MockURLProtocol.requests[0], "category"), #"["sponsor","selfpromo"]"#)
     }
 
+    func testSponsorsCategoriesWithQuotesStayValidJSON() async throws {
+        MockURLProtocol.handler = { request in
+            self.json(request.url!, self.fixtureData("sponsors_empty_OK.json"))
+        }
+        let nasty = ["sponsor", "we\"ird"]
+        _ = try await client.sponsors(videoId: "dQw4w9WgXcQ", categories: nasty)
+        let param = query(MockURLProtocol.requests[0], "category") ?? ""
+        // must round-trip as JSON, not break out of the array
+        let decoded = try JSONDecoder().decode([String].self, from: Data(param.utf8))
+        XCTAssertEqual(decoded, nasty)
+    }
+
     func testDearrowMapsVideoIdsToEntries() async throws {
         let client = try makeClient { request in
             self.json(request.url!, self.fixtureData("dearrow_OK.json"))
@@ -413,6 +425,11 @@ final class PipedAPIClientTests: XCTestCase {
         // self-hosted instances with ports keep working
         _ = try PipedAPIClient(baseURL: "http://192.168.1.222:8080")
         _ = try PipedAPIClient(baseURL: "http://localhost:3000")
+        _ = try PipedAPIClient(baseURL: "http://100.64.1.5:8080") // tailnet
+        // credentials and tokens are sent to the instance, so plain http to
+        // a public host is rejected (would expose them on the wire)
+        XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://pipedapi.example.com"))
+        XCTAssertThrowsError(try PipedAPIClient(baseURL: "http://8.8.8.8"))
     }
 }
 
