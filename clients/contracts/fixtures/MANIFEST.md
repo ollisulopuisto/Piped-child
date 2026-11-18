@@ -22,3 +22,25 @@ audioStreams) could not be recorded on 2026-11-18: all reachable instances
 were extraction-blocked. Add one as `streams_healthy_OK.json` on the first
 day an instance recovers; the error-taxonomy and fallback tests must keep
 passing against the degraded and error fixtures meanwhile.
+
+## Synthetic fixtures (added for M1-B, 2026-11-18)
+
+These endpoints were NOT exercised live on 2026-11-18 (all reachable
+instances failed extraction, and account endpoints need a real account).
+Shapes are derived from the Piped-child frontend source (field usage in
+src/components/ChannelPage.vue, PlaylistPage.vue, SubscriptionsPage.vue,
+LoginPage.vue, FooterComponent.vue) and the contracts in
+clients/contracts/api/README.md. Replace with recorded responses when a
+healthy instance is available.
+
+| File | Endpoint | Derivation source |
+| --- | --- | --- |
+| channel_OK_SYNTHETIC.json | GET /channel/{id} | ChannelPage.vue fields: id, name, avatarUrl, bannerUrl, description, subscriberCount, verified, nextpage, relatedStreams |
+| playlist_OK_SYNTHETIC.json | GET /playlists/{id} | PlaylistPage.vue fields: name, description, uploader*, videos, nextpage, relatedStreams |
+| user_playlists_OK_SYNTHETIC.json | GET /user/playlists | contracts/api/README.md: id, name, shortDescription, thumbnail, videos |
+| subscriptions_OK_SYNTHETIC.json | GET /subscriptions | SubscriptionsPage.vue fields: url, name, avatar (+ verified from upstream API) |
+| feed_OK_SYNTHETIC.json | GET /feed | Array of StreamItem (same shape as trending_OK.json) |
+| login_OK_SYNTHETIC.json | POST /login | LoginPage.vue: `{token}` on success, `{error}` on failure |
+| subscribed_OK_SYNTHETIC.json | GET /subscribed?channelId= | useSubscriptions.js: `response?.subscribed` |
+| config_OK_SYNTHETIC.json | GET /config | FooterComponent.vue: donationUrl, statusPageUrl, privacyPolicyUrl |
+| message_OK_SYNTHETIC.json | POST /logout, /subscribe, /unsubscribe, /user/playlists/* | OpenAPI `{"message": ...}` success bodies |
