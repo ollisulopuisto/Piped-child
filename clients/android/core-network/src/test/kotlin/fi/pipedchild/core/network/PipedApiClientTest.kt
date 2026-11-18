@@ -194,6 +194,64 @@ class PipedApiClientTest {
         assertNull(recorded.single().headers[HttpHeaders.Authorization])
     }
 
+    @Test
+    fun `playlist reads hit the auth instance without credentials`() = runTest {
+        // verified in usePlaylists.js getPlaylist + PlaylistPage.vue: playlist
+        // content comes from authApiUrl() with no Authorization header, so a
+        // user-created playlist (which lives on the account instance) resolves.
+        val requests = mutableListOf<HttpRequestData>()
+        val engine = MockEngine { req ->
+            requests += req
+            respond(fixture("playlist_OK_SYNTHETIC.json"), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }
+        val c = PipedApiClient("https://discovery.example", InMemoryTokenStore(), engine, "https://accounts.example")
+        c.playlist("pl-1")
+        c.playlistNextPage("pl-1", "tok")
+        assertEquals("accounts.example", requests[0].url.host)
+        assertEquals("accounts.example", requests[1].url.host)
+        assertNull(requests[0].headers[HttpHeaders.Authorization])
+        assertNull(requests[1].headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun `register stores the issued session token`() = runTest {
+        // verified in RegisterPage.vue: a successful register returns {token}
+        // and the frontend stores it exactly like a login
+        val store = InMemoryTokenStore()
+        val c = client(tokenStore = store) { json(fixture("login_OK_SYNTHETIC.json")) }
+        val token = c.register("olli", "hunter2")
+        assertEquals("synthetic-token-0123456789abcdef", token)
+        assertEquals(token, store.token(baseUrl))
+    }
+
+    @Test
+    fun `register rejected with a 200 error body maps to AuthenticationFailure`() = runTest {
+        val store = InMemoryTokenStore()
+        val c = client(tokenStore = store) { json("""{"error":"username taken"}""") }
+        assertFailsWith<PipedError.AuthenticationFailure> { c.register("olli", "hunter2") }
+        assertNull(store.token(baseUrl))
+    }
+
+    @Test
+    fun `playlist description update uses PATCH like the frontend`() = runTest {
+        // verified in usePlaylists.js changePlaylistDescription: method PATCH
+        val store = InMemoryTokenStore()
+        store.put(baseUrl, "tok-1")
+        val c = client(tokenStore = store) { json(fixture("message_OK_SYNTHETIC.json")) }
+        c.updatePlaylistDescription("pl-1", "new description")
+        val req = recorded.single()
+        assertEquals("PATCH", req.method.value)
+        assertEquals("/user/playlists/description", req.url.encodedPath)
+    }
+
+    @Test
+    fun `malformed opensearch payload maps to MalformedResponse`() = runTest {
+        // a 200 body like ["lofi",{}] must surface as a typed error, not an
+        // IllegalArgumentException escaping the taxonomy
+        val c = client { json("""["lofi",{}]""") }
+        assertFailsWith<PipedError.MalformedResponse> { c.suggestions("lofi") }
+    }
+
     // ---------- account (token in Authorization header) ----------
 
     @Test

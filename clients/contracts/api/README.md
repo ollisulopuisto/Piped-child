@@ -76,10 +76,13 @@ GET /subscriptions, POST /subscribe `{channelId}`, POST /unsubscribe,
 GET /subscribed?channelId=.
 GET /user/playlists → [{id, name, shortDescription, thumbnail, videos}].
 POST /user/playlists/create `{name}`; /delete `{playlistId}`; /rename
-`{playlistId, newName}`; /description; POST /user/playlists/add
+`{playlistId, newName}`; PATCH /user/playlists/description `{playlistId, description}`
+(verified in usePlaylists.js changePlaylistDescription); POST /user/playlists/add
 `{playlistId, videoIds:[...]}`; POST /user/playlists/remove
 `{playlistId, index}`.
-GET /playlists/{id} → playlist + relatedStreams + nextpage;
+GET /playlists/{id} → playlist + relatedStreams + nextpage (read from the
+auth instance, WITHOUT an Authorization header — verified in
+usePlaylists.js getPlaylist, 2026-11-18);
 GET /nextpage/playlists/{id}.
 
 Unauthenticated variants (local subscriptions): POST

@@ -54,6 +54,8 @@ import java.net.URLEncoder
 import java.nio.channels.UnresolvedAddressException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -149,7 +151,12 @@ class PipedApiClient(
             params = mapOf("query" to query),
         )
         if (arr.size < 2) throw PipedError.MalformedResponse("opensearch array too short (${arr.size} elements)")
-        return arr[1].jsonArray.map { it.jsonPrimitive.content }
+        val list = arr[1] as? JsonArray
+            ?: throw PipedError.MalformedResponse("opensearch second element is not an array")
+        return list.map {
+            (it as? JsonPrimitive)?.contentOrNull
+                ?: throw PipedError.MalformedResponse("opensearch suggestion is not a string")
+        }
     }
 
     // ---------- playback metadata ----------
@@ -183,12 +190,14 @@ class PipedApiClient(
     suspend fun channelNextPage(id: String, nextpage: String): ChannelResponse =
         call(HttpMethod.Get, "$baseUrl/nextpage/channel/${id.pathSegment()}", params = mapOf("nextpage" to nextpage))
 
-    /** Playlist reads need NO auth header (verified in usePlaylists.js:85-94). */
+    /** Playlist content reads come from the AUTH instance (verified in
+     *  usePlaylists.js getPlaylist: authApiUrl) but carry NO credentials, so
+     *  a user-created playlist resolves while nothing leaks. */
     suspend fun playlist(playlistId: String): PlaylistResponse =
-        call(HttpMethod.Get, "$baseUrl/playlists/${playlistId.pathSegment()}")
+        call(HttpMethod.Get, "$authUrl/playlists/${playlistId.pathSegment()}")
 
     suspend fun playlistNextPage(playlistId: String, nextpage: String): PlaylistResponse =
-        call(HttpMethod.Get, "$baseUrl/nextpage/playlists/${playlistId.pathSegment()}", params = mapOf("nextpage" to nextpage))
+        call(HttpMethod.Get, "$authUrl/nextpage/playlists/${playlistId.pathSegment()}", params = mapOf("nextpage" to nextpage))
 
     suspend fun config(): InstanceConfig =
         call(HttpMethod.Get, "$baseUrl/config")
@@ -213,8 +222,24 @@ class PipedApiClient(
         return token
     }
 
-    suspend fun register(username: String, password: String): MessageResponse =
-        call(HttpMethod.Post, "$authUrl/register", body = RegisterRequest(username, password))
+    /**
+     * Registers and stores the issued session token under [authUrl] (verified
+     * in RegisterPage.vue: a successful register returns {token} and the
+     * frontend stores it like a login). A 200 with `{"error": ...}` is a
+     * rejection and maps to AuthenticationFailure.
+     */
+    suspend fun register(username: String, password: String): String {
+        val resp = call<LoginResponse>(
+            HttpMethod.Post,
+            "$authUrl/register",
+            body = RegisterRequest(username, password),
+        )
+        val token = resp.token
+            ?: if (resp.error != null) throw PipedError.AuthenticationFailure
+            else throw PipedError.MalformedResponse("/register returned no token")
+        tokenStore.put(authUrl, token)
+        return token
+    }
 
     /** Invalidates the session server-side and drops the local token. */
     suspend fun logout(): MessageResponse {
@@ -294,7 +319,8 @@ class PipedApiClient(
 
     suspend fun updatePlaylistDescription(playlistId: String, description: String): MessageResponse =
         call(
-            HttpMethod.Post,
+            // verified in usePlaylists.js changePlaylistDescription: PATCH
+            HttpMethod.Patch,
             "$authUrl/user/playlists/description",
             body = PlaylistDescriptionRequest(playlistId, description),
             auth = true,
