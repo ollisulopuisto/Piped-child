@@ -75,11 +75,20 @@ class DashUtilsGoldenTest {
             ranges.findAll(kotlinMpd).map { it.value }.toList(),
         )
 
-        // Envelope equality
+        // Envelope and attribute-level equality (parser ignores these)
         val envelope = Regex("""(profiles|minBufferTime|type|mediaPresentationDuration)="[^"]+"""")
         assertEquals(
             envelope.findAll(jsMpd).map { it.value }.toSet(),
             envelope.findAll(kotlinMpd).map { it.value }.toSet(),
         )
+        // maxPlayoutRate / scanType are invisible to Media3's parser; compare
+        // them textually so the port cannot drift from the web client
+        for (attr in listOf("""maxPlayoutRate="1"""", """scanType="progressive""")) {
+            assertEquals(
+                "occurrences of $attr",
+                Regex(Regex.escape(attr)).findAll(jsMpd).count(),
+                Regex(Regex.escape(attr)).findAll(kotlinMpd).count(),
+            )
+        }
     }
 }

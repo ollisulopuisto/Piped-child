@@ -133,15 +133,10 @@ object PlaybackSelector {
             "$withoutFragment?rewrite=false"
         } else {
             val path = withoutFragment.substring(0, queryStart)
-            val params = withoutFragment.substring(queryStart + 1)
-                .split('&')
-                .map { if (it.substringBefore('=') == "rewrite") "rewrite=false" else it }
-            val joined = params.joinToString("&")
-            if (params.none { it == "rewrite=false" } && params.none { it.startsWith("rewrite=") }) {
-                "$path?$joined&rewrite=false"
-            } else {
-                "$path?$joined"
-            }
+            val params = withoutFragment.substring(queryStart + 1).split('&')
+            val hasRewrite = params.any { it.substringBefore('=') == "rewrite" }
+            val fixed = params.map { if (it.substringBefore('=') == "rewrite") "rewrite=false" else it }
+            path + "?" + (fixed + if (hasRewrite) emptyList() else listOf("rewrite=false")).joinToString("&")
         }
         return if (fragment.isEmpty()) rewritten else "$rewritten#$fragment"
     }
