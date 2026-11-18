@@ -34,13 +34,15 @@ returns 404 on current instances (verified on api.piped.private.coffee).
 | `/dearrow?videoIds=` | GET | no | DeArrow titles/thumbs, instance-proxied | yes (200, real titles) | Per-video map; fallback to original metadata |
 | `/config` | GET | no | Instance capability info | no | frontend fetches per instance (useConfig) |
 | `/feed/unauthenticated/rss?channels=` | GET | no | RSS without account | no | local-subscription mode |
-| `/login`, `/register`, `/logout`, `/user/delete` | POST | body | Account auth | no | returns token; stored per-instance |
+| `/login`, `/register` | POST | no | Account auth | no | credentials in body; returns token, stored per-instance |
+| `/logout` | POST | token | Invalidate session | no | Authorization header, NO body (verified in frontend PreferencesPage.vue) |
+| `/user/delete` | POST | token | Delete account | no | Authorization header + password in JSON body (verified in frontend) |
 | `/feed` | GET | token | Subscription feed | no | Authorization: token header |
 | `/feed/rss?authToken=` | GET | token | Authenticated RSS | no | token in query — avoid in clients |
 | `/subscriptions` (+ `/unsubscribe`, `/subscribed`) | GET/POST | token | Subscription management | no | |
 | `/subscriptions/unauthenticated` | POST | no | Multi-channel unauth sub feed | no | |
 | `/user/playlists` (+ create/delete/rename/add/remove/description) | GET/POST | token | Playlist management | no | full CRUD exists |
-| `/playlists/{id}`, `/nextpage/playlists/{id}` | GET | token (per frontend source; NOT verified live) | Playlist content | no | |
+| `/playlists/{id}`, `/nextpage/playlists/{id}` | GET | no | Playlist content | no | frontend `getPlaylist` sends NO Authorization header (verified in usePlaylists.js); auth needed only for `/user/playlists/*` management |
 | `/import`, `/import/playlist` | POST | token | YouTube import | no | |
 | `/rss/playlists/{id}` | GET | token | Playlist RSS | no | |
 
@@ -83,11 +85,15 @@ Consequences for the clients:
    only: automatic retry of `/streams` on the user's configured fallback
    instance list. Decision for M1; must not transfer auth tokens (§10).
 3. A degraded `/streams` can return `dash: null, hls: null` with only
-   progressive 360p. The web frontend compensates by generating a DASH MPD
-   client-side (src/utils/DashUtils.js) — that trick works for ExoPlayer but
-   NOT for AVPlayer. iOS fallback ordering: `hls` → progressive MP4 →
-   actionable error. When instance IPs are blocked, iOS is the first platform
-   to lose quality. Documented limitation per spec §8.
+   progressive 360p. Client-side DASH generation (src/utils/DashUtils.js)
+   does NOT compensate here: `generate_adaptation_set` excludes muxed
+   (progressive) streams, so a progressive-only response yields an empty MPD
+   on any platform. Android and iOS therefore lose quality EQUALLY on this
+   payload — both fall back to progressive 360p. The Android advantage (HLS
+   or client-generated DASH) exists only when the response carries adaptive
+   formats or manifest URLs. iOS fallback ordering: `hls` → HLS entries in
+   videoStreams (LBRY) → progressive MP4 → actionable error. Documented
+   limitation per spec §8.
 4. Self-hosting the backend (supported upstream, docs.piped.video) would
    take the family off public-instance AVAILABILITY — but it does not fix
    extraction blocking: a self-hosted instance still asks YouTube from its
