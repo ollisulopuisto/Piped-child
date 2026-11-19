@@ -66,3 +66,15 @@ Backgrounding preserves once-only state within this selection; leaving resets it
 Manual skip, markers, undo and persistent category preferences are later work.
 Unit tests exercise real Player interface calls via a recording test double and
 Compose remote opt-out. Actual hardware seeking remains unverified.
+
+### Instance diagnostics helper (not a TV screen)
+
+`InstanceDiagnostics` in core-network is an explicit one-shot API probe for future
+settings/error screens. After endpoint approval, the caller supplies a region and,
+optionally, a video it chose. It reports discovery and that video's stream-metadata
+response separately. `Responded` means decodable JSON only, including an empty
+response. It is not a healthy-instance rating or proof that media can play.
+Construction makes no request. The helper does not choose a video, fetch media or
+images, follow redirects, retry, switch instances, or save results. It uses public
+reads without an account token and propagates caller cancellation. TV settings
+still only saves the URL; no diagnostic button has been added.
