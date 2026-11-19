@@ -1,12 +1,10 @@
 package fi.pipedchild.tv
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import fi.pipedchild.core.model.PipedError
 import fi.pipedchild.core.model.StreamItem
 import fi.pipedchild.core.network.PipedApiClient
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,21 +42,17 @@ fun PipedError.toTvMessage(): String = when (this) {
 class HomeViewModel(
     private val client: PipedApiClient,
     private val region: String = "US",
-    // injected for tests; the app passes the default viewModel scope
-    scope: CoroutineScope? = null,
-) {
-    private val ownScope = scope == null
-    private val scope = scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val ownsClient: Boolean = true,
+) : ViewModel() {
 
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
-    init {
-        refresh()
-    }
-
+    // No auto-load in init: the first-run consent screen (architecture §6)
+    // must list every contacted endpoint BEFORE the first request, so the
+    // activity calls refresh() only after consent is on file.
     fun refresh() {
-        scope.launch { loadOnce() }
+        viewModelScope.launch { loadOnce() }
     }
 
     /** One load cycle, exposed as a suspend function so tests can await it
@@ -76,7 +70,14 @@ class HomeViewModel(
         }
     }
 
-    fun onCleared() {
-        if (ownScope) scope.cancel()
+    /** Closes owned resources. Called from [onCleared]; internal so tests
+     *  can exercise teardown without mocking the ViewModelStore. */
+    internal fun shutdown() {
+        if (ownsClient) client.close()
+    }
+
+    override fun onCleared() {
+        shutdown()
+        super.onCleared()
     }
 }

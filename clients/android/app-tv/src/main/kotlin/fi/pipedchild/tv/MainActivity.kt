@@ -3,6 +3,7 @@ package fi.pipedchild.tv
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,18 +12,23 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import fi.pipedchild.core.model.StreamItem
 import fi.pipedchild.core.network.PipedApiClient
 
@@ -31,13 +37,68 @@ import fi.pipedchild.core.network.PipedApiClient
  *  Instance selection in settings lands in a later M2 PR. */
 private const val DEFAULT_INSTANCE = "https://pipedapi.ducks.party"
 
+private const val PREFS = "piped_child_tv"
+
+/** Consent record: which instance the user accepted on the first-run
+ *  screen. Bumping the suffix re-asks if the endpoint story changes. */
+private const val KEY_CONSENTED_INSTANCE = "consented_instance_v1"
+
+/** The first-run consent text (architecture §6): every endpoint the app
+ *  will contact, listed BEFORE the first request. Piped proxies video,
+ *  images and SponsorBlock/DeArrow through the instance, so the instance
+ *  is the only host this app contacts. */
+fun consentText(instanceUrl: String): String =
+    "Piped Child contacts only the Piped instance you choose:\n" +
+        "$instanceUrl\n\n" +
+        "Videos, thumbnails and SponsorBlock data are proxied through it, " +
+        "so it sees this device's IP address. No analytics, no ads, " +
+        "no Google sign-in."
+
+class HomeViewModelFactory(private val instanceUrl: String) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T =
+        HomeViewModel(PipedApiClient(instanceUrl)) as T
+}
+
 class MainActivity : ComponentActivity() {
+
+    private val viewModel: HomeViewModel by viewModels { HomeViewModelFactory(DEFAULT_INSTANCE) }
+
+    private var consented by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val viewModel = HomeViewModel(PipedApiClient(DEFAULT_INSTANCE))
+        consented = getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getString(KEY_CONSENTED_INSTANCE, null) == DEFAULT_INSTANCE
         setContent {
             MaterialTheme {
-                HomeScreen(viewModel)
+                if (consented) {
+                    LaunchedEffect(Unit) { viewModel.refresh() }
+                    HomeScreen(viewModel)
+                } else {
+                    FirstRunScreen(instanceUrl = DEFAULT_INSTANCE, onContinue = {
+                        getSharedPreferences(PREFS, MODE_PRIVATE)
+                            .edit()
+                            .putString(KEY_CONSENTED_INSTANCE, DEFAULT_INSTANCE)
+                            .apply()
+                        consented = true
+                    })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FirstRunScreen(instanceUrl: String, onContinue: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().padding(48.dp)) {
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            Text(consentText(instanceUrl))
+            Card(onClick = onContinue) {
+                Text("Continue", modifier = Modifier.padding(16.dp))
             }
         }
     }
