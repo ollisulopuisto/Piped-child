@@ -256,4 +256,32 @@ class TvScreenRenderTest {
         compose.onNodeWithText("SponsorBlock unavailable. Playing without skips.").assertIsDisplayed()
         capture("sponsorblock-unavailable")
     }
+
+    @Test fun `thumbnail changes restart loading and clear pixels on revocation`() {
+        val source = Bitmap.createBitmap(16, 9, Bitmap.Config.ARGB_8888)
+        source.eraseColor(android.graphics.Color.GREEN)
+        val bytes = java.io.ByteArrayOutputStream().also { source.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        source.recycle()
+        val allowed = ThumbnailConsent().decide(listOf("https://images.example"), true)
+        var consent by mutableStateOf(allowed)
+        var url by mutableStateOf<String?>("https://images.example/a.png")
+        var firstCalls = 0
+        var secondCalls = 0
+        val first = ThumbnailRepository { firstCalls++; bytes }
+        val second = ThumbnailRepository { secondCalls++; bytes }
+        var repo by mutableStateOf(first)
+        compose.setContent { TvTheme { VideoThumbnail(url, consent, repo) } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("video-thumbnail").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { repo = second }
+        compose.waitForIdle()
+        compose.waitUntil(10_000) { secondCalls == 1 }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(1, firstCalls); consent = ThumbnailConsent() }
+        compose.onNodeWithTag("video-thumbnail").assertDoesNotExist()
+        compose.runOnIdle { consent = allowed }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("video-thumbnail").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { url = null }
+        compose.onNodeWithTag("video-thumbnail").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, secondCalls) }
+    }
 }

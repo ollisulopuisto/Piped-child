@@ -78,6 +78,7 @@ internal fun ProxyConsentScreen(
 /** Playback exists only while the surface is STARTED. Stop/background,
  * Back and composition disposal all release ExoPlayer. A fresh start
  * creates a fresh player and resumes from the saved in-session position. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun PlayerSurface(media: PlaybackMedia, sponsors: SponsorUiState, onBack: () -> Unit) {
     val context = LocalContext.current
