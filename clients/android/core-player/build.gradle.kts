@@ -34,6 +34,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
 
+    implementation("androidx.media3:media3-datasource-okhttp:1.4.1")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.12.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

@@ -55,11 +55,11 @@ class HomeViewModel(
     // No auto-load in init: the first-run consent screen (architecture §6)
     // must list every contacted endpoint BEFORE the first request, so the
     // activity calls refresh() only after consent is on file.
-    fun refresh() {
+    fun refresh(): Job {
         // Latest-request-wins: cancel the in-flight load so a slow earlier
         // response can never overwrite the result of a newer refresh.
         refreshJob?.cancel()
-        refreshJob = viewModelScope.launch { loadOnce() }
+        return viewModelScope.launch { loadOnce() }.also { refreshJob = it }
     }
 
     /** One load cycle, exposed as a suspend function so tests can await it

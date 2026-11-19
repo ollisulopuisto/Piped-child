@@ -12,6 +12,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -132,9 +133,11 @@ class HomeViewModelTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {
             var calls = 0
+            val firstStarted = CompletableDeferred<Unit>()
             val engine = MockEngine {
                 calls += 1
                 if (calls == 1) {
+                    firstStarted.complete(Unit)
                     awaitCancellation()
                 } else {
                     respond(trendingJson, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
@@ -143,14 +146,17 @@ class HomeViewModelTest {
             val vm = HomeViewModel(
                 PipedApiClient("https://pipedapi.example.com", InMemoryTokenStore(), engine),
             )
-            vm.refresh()
-            runCurrent()
-            vm.refresh()
-            advanceUntilIdle()
+            val first = vm.refresh()
+            firstStarted.await()
+            val second = vm.refresh()
+            first.join()
+            second.join()
             assertEquals(2, calls)
             val s = vm.state.value
             assertIs<HomeUiState.Content>(s)
             assertEquals(listOf("First", "Second"), s.items.map { it.title })
+            vm.shutdown()
+            advanceUntilIdle()
         } finally {
             Dispatchers.resetMain()
         }

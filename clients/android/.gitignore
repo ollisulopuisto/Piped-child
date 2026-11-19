@@ -5,3 +5,6 @@ local.properties
 *.iml
 .idea/
 captures/
+
+# Kotlin compiler local session state
+.kotlin/
