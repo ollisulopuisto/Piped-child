@@ -93,4 +93,122 @@ class PlaybackViewModelTest {
             vm.shutdown()
         } finally { Dispatchers.resetMain() }
     }
+
+    private fun sponsorVm(status: HttpStatusCode = HttpStatusCode.OK,
+        body: String = """{"segments":[{"segment":[10,20],"category":"sponsor","actionType":"skip"}]}""",
+        beforeResponse: suspend () -> Unit = {}, streamBody: String = response, requests: MutableList<String> = mutableListOf(),
+    ) = PlaybackViewModel(PipedApiClient("https://api.example.com", InMemoryTokenStore(), MockEngine { request ->
+        requests += request.url.toString()
+        if (request.url.encodedPath.startsWith("/sponsors/")) {
+            assertEquals("api.example.com", request.url.host)
+            assertEquals("[\"sponsor\",\"interaction\",\"selfpromo\",\"music_offtopic\"]", request.url.parameters["category"])
+            beforeResponse()
+            respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
+        } else respond(streamBody, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+    }))
+
+    @Test fun `sponsor request occurs only after Play and goes through selected instance`() = runBlocking {
+        val requests = mutableListOf<String>()
+        val vm = sponsorVm(requests = requests)
+        vm.loadOnce("example")
+        val media = assertIs<PlaybackUiState.AwaitingConsent>(vm.state.value).media
+        vm.loadSponsorsOnce(media)
+        assertEquals(1, requests.size)
+        vm.approveProxy()
+        vm.loadSponsorsOnce(media)
+        assertEquals(2, requests.size)
+        assertEquals(1, assertIs<SponsorUiState.Ready>(vm.sponsors.value).segments.size)
+        assertIs<PlaybackUiState.Ready>(vm.state.value)
+        vm.shutdown()
+    }
+
+    @Test fun `opting out issues no sponsor request and cannot be changed after playback starts`() = runBlocking {
+        val requests = mutableListOf<String>()
+        val vm = sponsorVm(requests = requests)
+        vm.loadOnce("example")
+        vm.setSponsorBlockEnabled(false)
+        vm.approveProxy()
+        vm.setSponsorBlockEnabled(true)
+        val media = assertIs<PlaybackUiState.Ready>(vm.state.value).media
+        assertFalse(media.sponsorBlockEnabled)
+        vm.loadSponsorsOnce(media)
+        assertEquals(1, requests.size)
+        assertEquals(SponsorUiState.Disabled, vm.sponsors.value)
+        vm.shutdown()
+    }
+
+    @Test fun `sponsor API and parsing errors never block playback`() = runBlocking {
+        for ((status, body) in listOf(HttpStatusCode.NotFound to "{}", HttpStatusCode.OK to "not-json")) {
+            val vm = sponsorVm(status, body)
+            vm.loadOnce("example")
+            vm.approveProxy()
+            vm.loadSponsorsOnce(assertIs<PlaybackUiState.Ready>(vm.state.value).media)
+            assertEquals(SponsorUiState.Unavailable, vm.sponsors.value)
+            assertIs<PlaybackUiState.Ready>(vm.state.value)
+            vm.shutdown()
+        }
+    }
+
+    @Test fun `slow sponsor API times out without delaying Ready`() = runBlocking {
+        val vm = sponsorVm(beforeResponse = { awaitCancellation() })
+        vm.loadOnce("example")
+        vm.approveProxy()
+        val media = assertIs<PlaybackUiState.Ready>(vm.state.value).media
+        val job = launch(start = CoroutineStart.UNDISPATCHED) { vm.loadSponsorsOnce(media) }
+        assertEquals(SponsorUiState.Loading, vm.sponsors.value)
+        assertIs<PlaybackUiState.Ready>(vm.state.value)
+        job.join()
+        assertEquals(SponsorUiState.Unavailable, vm.sponsors.value)
+        vm.shutdown()
+    }
+
+    @Test fun `Back while sponsors load discards late completion`() = runBlocking {
+        val ready = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        val vm = sponsorVm(beforeResponse = { ready.complete(Unit); finish.await() })
+        vm.loadOnce("example")
+        vm.approveProxy()
+        val media = assertIs<PlaybackUiState.Ready>(vm.state.value).media
+        val job = launch(start = CoroutineStart.UNDISPATCHED) { vm.loadSponsorsOnce(media) }
+        withTimeout(10000) { ready.await() }
+        vm.closeSelection()
+        finish.complete(Unit)
+        job.join()
+        assertEquals(SponsorUiState.Disabled, vm.sponsors.value)
+        assertIs<PlaybackUiState.Loading>(vm.state.value)
+        vm.shutdown()
+    }
+
+    @Test fun `sponsor cancellation propagates`() = runBlocking {
+        val vm = sponsorVm(beforeResponse = { awaitCancellation() })
+        vm.loadOnce("example")
+        vm.approveProxy()
+        val media = assertIs<PlaybackUiState.Ready>(vm.state.value).media
+        val job = launch(start = CoroutineStart.UNDISPATCHED) { vm.loadSponsorsOnce(media) }
+        job.cancelAndJoin()
+        assertTrue(job.isCancelled)
+        vm.shutdown()
+    }
+
+    @Test fun `nonempty sponsor response decodes`() = runBlocking {
+        val client = PipedApiClient("https://api.example.com", InMemoryTokenStore(), MockEngine {
+            respond("""{"segments":[{"segment":[10,20],"category":"sponsor","actionType":"skip"}]}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        assertEquals(1, client.sponsors("example", listOf("sponsor")).segments.size)
+        client.close()
+    }
+
+    @Test fun `live playback never requests SponsorBlock`() = runBlocking {
+        val requests = mutableListOf<String>()
+        val vm = sponsorVm(streamBody = response.replace("\"duration\":120", "\"duration\":120,\"livestream\":true,\"hls\":\"https://proxy.example.com/live.m3u8\""), requests = requests)
+        vm.loadOnce("example")
+        vm.approveProxy()
+        val media = assertIs<PlaybackUiState.Ready>(vm.state.value).media
+        assertTrue(media.livestream)
+        vm.loadSponsorsOnce(media)
+        assertEquals(1, requests.size)
+        assertEquals(SponsorUiState.Disabled, vm.sponsors.value)
+        vm.shutdown()
+    }
 }

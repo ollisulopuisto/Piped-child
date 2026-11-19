@@ -221,4 +221,39 @@ class TvScreenRenderTest {
         compose.onNodeWithText("First video").assertIsFocused()
         vm.shutdown()
     }
+
+    @Test fun `remote can turn SponsorBlock off before Play`() {
+        var approved: Boolean? = null
+        compose.setContent { TvTheme {
+            var media by remember { mutableStateOf(PlaybackMedia("Example video", "https://piped-proxy.ducks.party",
+                PlaybackChoice.Progressive("https://piped-proxy.ducks.party/videoplayback"))) }
+            ProxyConsentScreen(media, { approved = media.sponsorBlockEnabled }, {},
+                { media = media.copy(sponsorBlockEnabled = it) })
+        } }
+        compose.onNodeWithText("Play").assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("SponsorBlock: on").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("SponsorBlock: off").assertIsDisplayed().assertIsFocused()
+        capture("sponsorblock-off")
+        compose.onNodeWithText("SponsorBlock: off").performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Play").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.runOnIdle { assertEquals(false, approved) }
+    }
+
+    @Test fun `live consent does not offer automatic skips`() {
+        val media = PlaybackMedia("Live video", "https://piped-proxy.ducks.party",
+            PlaybackChoice.Hls("https://piped-proxy.ducks.party/live.m3u8"), livestream = true)
+        compose.setContent { TvTheme { ProxyConsentScreen(media, {}, {}) } }
+        compose.onNodeWithText("SponsorBlock: on").assertDoesNotExist()
+        compose.onNodeWithText("Play").assertIsFocused()
+    }
+
+    @Test fun `unavailable SponsorBlock notice is readable without stealing focus`() {
+        compose.setContent { TvTheme {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                SponsorUnavailableNotice(androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(16.dp))
+            }
+        } }
+        compose.onNodeWithText("SponsorBlock unavailable. Playing without skips.").assertIsDisplayed()
+        capture("sponsorblock-unavailable")
+    }
 }
