@@ -125,41 +125,11 @@ TV and tablet share core-* modules but not screens (spec §3): d-pad focus
 model and touch layouts are different designs. The tablet app is the
 touch-first one; Android phones are out of scope unless reuse is free (§2).
 
-## 5. ChoreKeeper — PROPOSED optional integration (unconfirmed)
+## 5. Screen-time integration removed
 
-ChoreKeeper is the family's private chore/screen-time server. It exposes a
-REST API with a per-child "screen-time bank" and a screen-session concept
-(request minutes on a named target, server keeps the clock, session carries
-`ends_at`/`locks_at`, unused minutes refundable, optional parent approval).
-
-**Stated in the owner handoff (2026-11-18, not verifiable from this repo).
-ChoreKeeper integration itself remains a proposed OPTIONAL feature — nothing
-here confirms it will be built:**
-
-- The Chromecast sits on the home Wi-Fi; the home router is in Tailscale.
-- The owner wants the Android TV app to be ABLE to reach the ChoreKeeper
-  server. Network path: Chromecast → home Wi-Fi → home router → Tailscale
-  routing → ChoreKeeper server. The router being in the tailnet does NOT
-  guarantee LAN-to-tailnet routing works — that must be tested, not assumed.
-  The Chromecast does not necessarily need its own Tailscale client.
-
-**What is NOT confirmed:** mandatory enforcement, child profile selection at
-startup, ChoreKeeper authentication or QR pairing, parent approval flow,
-fail-closed playback, session/refund semantics. Nothing in this section is a
-commitment.
-
-**Design constraints if it is ever built:**
-
-- A separate, isolated module behind its own interface
-  (`feature/chorekeeper` on Android, one Swift package on iOS). The playback
-  engine has NO dependency on it; the client is fully functional without it
-  unless an explicitly enabled policy requires otherwise.
-- Configurable ChoreKeeper server URL in settings. Errors must distinguish
-  routing failure (server unreachable), authentication failure, and API
-  errors — never a generic spinner.
-- No changes to the ChoreKeeper backend are part of this project.
-- No account data flows to ChoreKeeper; the integration would be disclosed
-  on the first-run endpoint screen like every other connection.
+Owner decision, 2026-11-19: the Piped clients do not connect to ChoreKeeper.
+The optional integration proposal is withdrawn. No server connection, child
+identity, time-bank operations or playback enforcement is part of this project.
 
 ## 6. Privacy and security rules (binding on all clients)
 
@@ -206,8 +176,7 @@ commitment.
 ### M2–M6
 
 - M2 Android TV (Compose for TV, Media3, d-pad, validated on the Chromecast
-  with Google TV 4K; ChoreKeeper only as the isolated optional module if the
-  owner confirms it by then), M3 Tablet, M4 iPhone (SwiftUI, AVPlayer,
+  with Google TV 4K), M3 Tablet, M4 iPhone (SwiftUI, AVPlayer,
   background audio, PiP, AirPlay), M5 feature parity, M6 release readiness.
 - CI (spec §13): separate workflows per platform; light checks on PR,
   expensive builds manual/release-only (owner's GitHub-minutes rule).

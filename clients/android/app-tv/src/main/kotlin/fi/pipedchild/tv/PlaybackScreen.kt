@@ -18,6 +18,10 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import fi.pipedchild.core.player.PlayerManager
+import fi.pipedchild.core.player.SponsorSkipEngine
+import fi.pipedchild.core.player.applySponsorSkip
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 fun PlaybackScreen(videoId: String, viewModel: PlaybackViewModel, onBack: () -> Unit) {
@@ -29,8 +33,12 @@ fun PlaybackScreen(videoId: String, viewModel: PlaybackViewModel, onBack: () -> 
         PlaybackUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Loading video...")
         }
-        is PlaybackUiState.AwaitingConsent -> ProxyConsentScreen(s.media, viewModel::approveProxy, onBack)
-        is PlaybackUiState.Ready -> PlayerSurface(s.media, onBack)
+        is PlaybackUiState.AwaitingConsent -> ProxyConsentScreen(s.media, viewModel::approveProxy, onBack, viewModel::setSponsorBlockEnabled)
+        is PlaybackUiState.Ready -> {
+            val sponsors by viewModel.sponsors.collectAsState()
+            LaunchedEffect(s.media) { viewModel.loadSponsorsOnce(s.media) }
+            PlayerSurface(s.media, sponsors, onBack)
+        }
         is PlaybackUiState.Error -> Column(
             Modifier.fillMaxSize().padding(48.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
@@ -43,7 +51,10 @@ fun PlaybackScreen(videoId: String, viewModel: PlaybackViewModel, onBack: () -> 
 }
 
 @Composable
-internal fun ProxyConsentScreen(media: PlaybackMedia, onPlay: () -> Unit, onBack: () -> Unit) {
+internal fun ProxyConsentScreen(
+    media: PlaybackMedia, onPlay: () -> Unit, onBack: () -> Unit,
+    onSponsorBlockChange: (Boolean) -> Unit = {},
+) {
     Column(
         modifier = Modifier.fillMaxSize().padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
@@ -53,6 +64,13 @@ internal fun ProxyConsentScreen(media: PlaybackMedia, onPlay: () -> Unit, onBack
             "It will receive this device's IP address and video requests. " +
             "Other media destinations and redirects are blocked. No video bytes are loaded before Play.")
         Button(onClick = onPlay, modifier = initialFocus()) { Text("Play") }
+        if (!media.livestream) {
+            OutlinedButton(onClick = { onSponsorBlockChange(!media.sponsorBlockEnabled) }, modifier = remoteFocus()) {
+                Text("SponsorBlock: " + if (media.sponsorBlockEnabled) "on" else "off")
+            }
+            Text("Skips sponsors, self-promotion, interaction reminders and non-music sections. Uses the approved API instance.",
+                style = MaterialTheme.typography.bodySmall)
+        }
         OutlinedButton(onClick = onBack, modifier = remoteFocus()) { Text("Back") }
     }
 }
@@ -61,13 +79,25 @@ internal fun ProxyConsentScreen(media: PlaybackMedia, onPlay: () -> Unit, onBack
  * Back and composition disposal all release ExoPlayer. A fresh start
  * creates a fresh player and resumes from the saved in-session position. */
 @Composable
-private fun PlayerSurface(media: PlaybackMedia, onBack: () -> Unit) {
+private fun PlayerSurface(media: PlaybackMedia, sponsors: SponsorUiState, onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var player by remember(media) { mutableStateOf<ExoPlayer?>(null) }
     var error by remember(media) { mutableStateOf<String?>(null) }
     var position by remember(media) { mutableLongStateOf(C.TIME_UNSET) }
     var playWhenReady by remember(media) { mutableStateOf(true) }
+
+    val skipEngine = remember(media, sponsors) {
+        (sponsors as? SponsorUiState.Ready)?.let { SponsorSkipEngine(it.segments) }
+    }
+    LaunchedEffect(player, skipEngine) {
+        val current = player ?: return@LaunchedEffect
+        val engine = skipEngine ?: return@LaunchedEffect
+        while (isActive) {
+            if (!media.livestream) applySponsorSkip(current, engine)
+            delay(250)
+        }
+    }
 
     DisposableEffect(media, lifecycle) {
         fun stop() {
@@ -121,7 +151,7 @@ private fun PlayerSurface(media: PlaybackMedia, onBack: () -> Unit) {
             Text(error!!)
             Button(onClick = onBack, modifier = initialFocus()) { Text("Back") }
         }
-    } else {
+    } else Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx -> PlayerView(ctx).apply {
@@ -134,5 +164,15 @@ private fun PlayerSurface(media: PlaybackMedia, onBack: () -> Unit) {
             update = { it.player = player },
             onRelease = { it.player = null },
         )
+        if (sponsors == SponsorUiState.Unavailable) {
+            SponsorUnavailableNotice(Modifier.align(Alignment.TopCenter).padding(16.dp))
+        }
+    }
+}
+
+@Composable
+internal fun SponsorUnavailableNotice(modifier: Modifier = Modifier) {
+    Surface(modifier = modifier) {
+        Text("SponsorBlock unavailable. Playing without skips.", modifier = Modifier.padding(12.dp))
     }
 }

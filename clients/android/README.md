@@ -28,7 +28,7 @@ This is a development APK, not a release-signed build. Installing or launching i
 
 Media requests to undisclosed origins are blocked. The data source rewrites Google video URLs through the approved proxy, converts `/videoplayback` byte ranges to the Piped query format, and rejects HTTP redirects. Direct LBRY/CDN entries are excluded rather than silently contacting them. Some videos may therefore have no supported source even if the web frontend can play them.
 
-SponsorBlock playback integration, and the optional isolated ChoreKeeper module are not included yet.
+SponsorBlock automatic VOD skipping is available per playback selection.
 
 ## Verification boundaries
 
@@ -47,3 +47,22 @@ Loopback HTTP tests verify redirect refusal, MIME checks, the chunked download l
 Open Instance settings before first-run approval or press Up from the grid's first row. Enter an HTTPS API host root, optionally with a port, then Save instance. The form does not probe the URL or claim it is healthy. A changed URL is saved locally, API approval is removed, and a fresh MainActivity session replaces the old clients, memory caches and image approvals. The new instance cannot receive requests until the first-run screen is accepted. Saving an equivalent normalized URL leaves the existing session unchanged. Cancel and invalid input leave the existing setting and approval unchanged.
 
 This TV settings increment supports HTTPS only, including private HTTPS hosts with valid certificates. It does not expose the networking module's private-network plaintext HTTP allowance, because the Android app does not yet have a verified per-domain cleartext configuration. No silent failover or token migration is performed.
+
+### SponsorBlock playback
+
+Before Play, SponsorBlock can be turned off with the remote. When on (matching
+the web default), it requests sponsor, interaction, selfpromo and music_offtopic
+segments through the already approved API instance only, after Play. It does not
+contact a separate SponsorBlock host. Failure or a five-second deadline leaves
+video playback usable and displays an unavailable notice. Live playback never
+requests or applies skips.
+
+The engine merges overlapping/touching skip intervals, ignores malformed times,
+unknown actions and unselected categories, clamps to actual duration and refuses
+whole-video skips. Each interval is skipped once per selection, so rewinding into
+it is respected. Ticks run only with a player, and seek only playing, seekable VOD
+with a known duration and a permitted seek command, never ads or live/DVR.
+Backgrounding preserves once-only state within this selection; leaving resets it.
+Manual skip, markers, undo and persistent category preferences are later work.
+Unit tests exercise real Player interface calls via a recording test double and
+Compose remote opt-out. Actual hardware seeking remains unverified.
