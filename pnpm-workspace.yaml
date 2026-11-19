@@ -7,3 +7,8 @@ overrides:
   "serialize-javascript@6.0.2": 7.1.3
   "serialize-javascript@^6.0.1": 7.1.3
   "@intlify/shared@*": 11.4.18
+  # Transitive development tools: GHSA-3g3m-2fjr-6pw4 and GHSA-g3hv-75wg-m249.
+  # Upstream offers no same-major fixes. These overrides need owner approval.
+  "glob@11.1.0": 14.0.2
+  "minimatch@>=10.0.0 <11.0.0": 11.0.1
+  "glob@14.0.2>minimatch": 11.0.1
