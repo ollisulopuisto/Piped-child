@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -179,6 +180,45 @@ class TvScreenRenderTest {
         compose.onNodeWithText("Example video").assertIsDisplayed()
         capture("thumbnail-in-grid")
         compose.runOnIdle { assertEquals(1, requests) }
+        vm.shutdown()
+    }
+
+    @Test
+    fun `instance settings render and reject invalid URLs before save`() {
+        var saved: String? = null
+        compose.setContent { TvTheme {
+            InstanceSettingsScreen("https://pipedapi.ducks.party", { saved = it; true }, {})
+        } }
+        capture("instance-settings")
+        compose.onNodeWithText("API instance URL").performTextReplacement("https://user:secret@api.example")
+        compose.onNodeWithText("Save instance").performClick()
+        compose.runOnIdle { assertNull(saved) }
+        compose.onNodeWithText("Use an HTTPS host root", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("API instance URL").performTextReplacement("HTTPS://NEW.example:443/")
+        compose.onNodeWithText("Save instance").performClick()
+        compose.runOnIdle { assertEquals("https://new.example", saved) }
+    }
+
+    @Test
+    fun `up from the first grid row reaches settings and down returns to grid`() {
+        val vm = HomeViewModel(PipedApiClient("https://api.example.com", InMemoryTokenStore(), MockEngine {
+            respond("""[{"url":"/watch?v=one","title":"First video"}]""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }))
+        runBlocking { vm.loadOnce() }
+        compose.setContent { TvTheme {
+            val header = remember { androidx.compose.ui.focus.FocusRequester() }
+            androidx.compose.foundation.layout.Column {
+                androidx.compose.material3.Button({}, modifier = androidx.compose.ui.Modifier
+                    .focusRequester(header).then(remoteFocus())) { androidx.compose.material3.Text("Settings target") }
+                HomeScreen(vm, rememberLazyGridState(), null, onNavigateUp = { header.requestFocus() }) {}
+            }
+        } }
+        compose.onNodeWithText("First video").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Settings target").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("First video").assertIsFocused()
         vm.shutdown()
     }
 }

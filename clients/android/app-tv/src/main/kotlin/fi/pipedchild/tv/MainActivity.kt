@@ -3,9 +3,16 @@
 package fi.pipedchild.tv
 
 import android.os.Bundle
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Button
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.input.InputMode
 import androidx.compose.foundation.border
@@ -49,17 +56,6 @@ import androidx.lifecycle.ViewModelProvider
 import fi.pipedchild.core.model.StreamItem
 import fi.pipedchild.core.network.PipedApiClient
 
-/** Default instance for the first-run experience (the M1-A capability
- *  matrix recorded healthy trending responses from it on 2026-11-18).
- *  Instance selection in settings lands in a later M2 PR. */
-private const val DEFAULT_INSTANCE = "https://pipedapi.ducks.party"
-
-private const val PREFS = "piped_child_tv"
-
-/** Consent record: which instance the user accepted on the first-run
- *  screen. Bumping the suffix re-asks if the endpoint story changes. */
-private const val KEY_CONSENTED_INSTANCE = "consented_instance_v2"
-
 /** The API is disclosed before metadata requests. Playback separately
  * asks for consent to the exact media proxy returned by that API. */
 fun consentText(instanceUrl: String): String =
@@ -68,7 +64,7 @@ fun consentText(instanceUrl: String): String =
         "It receives this device's IP address, trending and video metadata requests. " +
         "Before playing, the app separately asks you to approve the media proxy. " +
         "No analytics, no ads, no Google sign-in. Thumbnail image origins are " +
-        "listed for separate approval before images load. Instance settings are not available yet."
+        "listed for separate approval before images load. Settings lets you change the API instance."
 
 class HomeViewModelFactory(private val instanceUrl: String) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -78,13 +74,21 @@ class HomeViewModelFactory(private val instanceUrl: String) : ViewModelProvider.
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: HomeViewModel by viewModels { HomeViewModelFactory(DEFAULT_INSTANCE) }
+    private val instanceUrl by lazy { InstancePreferences(this).current() }
+    private val settings = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK && InstancePreferences(this).current() != instanceUrl) {
+            // A fresh activity means a fresh ViewModelStore and clients.
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
+    }
+    private val viewModel: HomeViewModel by viewModels { HomeViewModelFactory(instanceUrl) }
 
     private val playbackModel: PlaybackViewModel by viewModels {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                PlaybackViewModel(PipedApiClient(DEFAULT_INSTANCE)) as T
+                PlaybackViewModel(PipedApiClient(instanceUrl)) as T
         }
     }
 
@@ -93,37 +97,49 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consented = getSharedPreferences(PREFS, MODE_PRIVATE)
-            .getString(KEY_CONSENTED_INSTANCE, null) == DEFAULT_INSTANCE
+            .getString(KEY_CONSENTED_INSTANCE, null) == instanceUrl
         setContent {
             TvTheme {
+                var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+                var lastSelected by rememberSaveable { mutableStateOf<String?>(null) }
+                val gridState = rememberLazyGridState()
+                val headerFocus = remember { FocusRequester() }
                 if (consented) {
-                    LaunchedEffect(Unit) { viewModel.refresh() }
-                    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-                    var lastSelected by rememberSaveable { mutableStateOf<String?>(null) }
-                    val gridState = rememberLazyGridState()
-                    val playing = selectedId
-                    if (playing == null) {
-                        HomeScreen(viewModel, gridState, lastSelected, onVideoSelected = { url ->
-                            videoIdFromWatchUrl(url)?.let { id ->
-                                lastSelected = url
-                                selectedId = id
-                            }
-                        })
-                    } else {
-                        PlaybackScreen(playing, playbackModel, onBack = { selectedId = null })
-                    }
+                    LaunchedEffect(instanceUrl) { viewModel.refresh() }
+                }
+                val playing = selectedId
+                if (playing != null && consented) {
+                    PlaybackScreen(playing, playbackModel, onBack = { selectedId = null })
                 } else {
-                    FirstRunScreen(instanceUrl = DEFAULT_INSTANCE, onContinue = {
-                        getSharedPreferences(PREFS, MODE_PRIVATE)
-                            .edit()
-                            .putString(KEY_CONSENTED_INSTANCE, DEFAULT_INSTANCE)
-                            .apply()
-                        consented = true
-                    })
+                    Column(Modifier.fillMaxSize()) {
+                        Button(
+                            onClick = { settings.launch(Intent(this@MainActivity, InstanceSettingsActivity::class.java)) },
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                                .focusRequester(headerFocus).then(remoteFocus()),
+                        ) { Text("Instance settings") }
+                        Box(Modifier.weight(1f)) {
+                            if (consented) {
+                                HomeScreen(viewModel, gridState, lastSelected,
+                                    onNavigateUp = { headerFocus.requestFocus() }, onVideoSelected = { url ->
+                                        videoIdFromWatchUrl(url)?.let { id ->
+                                            lastSelected = url
+                                            selectedId = id
+                                        }
+                                    })
+                            } else {
+                                FirstRunScreen(instanceUrl, onContinue = {
+                                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                        .putString(KEY_CONSENTED_INSTANCE, instanceUrl).apply()
+                                    consented = true
+                                })
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+
 }
 
 @Composable
@@ -147,6 +163,7 @@ internal fun HomeScreen(
     gridState: LazyGridState,
     lastSelected: String?,
     repository: ThumbnailRepository = viewModel.thumbnailRepository,
+    onNavigateUp: (() -> Unit)? = null,
     onVideoSelected: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
@@ -175,7 +192,7 @@ internal fun HomeScreen(
                     }
                 } else {
                     TrendingGrid(s.items, gridState, lastSelected, imageConsent,
-                        repository, onVideoSelected)
+                        repository, onNavigateUp, onVideoSelected)
                 }
             }
         }
@@ -189,11 +206,13 @@ private fun TrendingGrid(
     lastSelected: String?,
     imageConsent: ThumbnailConsent,
     repository: ThumbnailRepository,
+    onNavigateUp: (() -> Unit)?,
     onVideoSelected: (String) -> Unit,
 ) {
     val inputMode = LocalInputModeManager.current
     val requesters = remember(items.map { it.url }) { List(items.size) { FocusRequester() } }
     val scope = rememberCoroutineScope()
+    val windowInfo = LocalWindowInfo.current
     val target = items.indexOfFirst { it.url == lastSelected }.coerceAtLeast(0)
     suspend fun focusItem(index: Int) {
         if (index !in items.indices) return
@@ -209,7 +228,10 @@ private fun TrendingGrid(
     }
     // One restore per entry to Home, not when an off-screen card is
     // recomposed during ordinary scrolling.
-    LaunchedEffect(Unit) { focusItem(target) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { windowInfo.isWindowFocused }.first { it }
+        focusItem(target)
+    }
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Fixed(4),
@@ -224,6 +246,10 @@ private fun TrendingGrid(
                 modifier = Modifier.focusRequester(requesters[index])
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        if (event.key == Key.DirectionUp && index < 4 && onNavigateUp != null) {
+                            onNavigateUp()
+                            return@onPreviewKeyEvent true
+                        }
                         val next = when (event.key) {
                             Key.DirectionLeft -> if (index % 4 > 0) index - 1 else index
                             Key.DirectionRight -> if (index % 4 < 3 && index < items.lastIndex) index + 1 else index
@@ -259,8 +285,10 @@ internal fun remoteFocus(initial: Boolean = false): Modifier {
     val requester = remember { FocusRequester() }
     val inputMode = LocalInputModeManager.current
     var focused by remember { mutableStateOf(false) }
+    val windowInfo = LocalWindowInfo.current
     LaunchedEffect(Unit) {
         if (!initial) return@LaunchedEffect
+        snapshotFlow { windowInfo.isWindowFocused }.first { it }
         inputMode.requestInputMode(InputMode.Keyboard)
         // Input mode may update focus properties on the next frame.
         withFrameNanos { }
