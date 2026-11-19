@@ -33,9 +33,9 @@ internal fun ThumbnailConsentScreen(origins: List<String>, onDecision: (Boolean)
 
 @Composable
 internal fun VideoThumbnail(url: String?, consent: ThumbnailConsent, repository: ThumbnailRepository) {
-    val bitmap by produceState<android.graphics.Bitmap?>(null, url, consent) {
-        value = null
-        if (url != null) value = repository.load(url, consent)
+    var bitmap by remember(url, consent, repository) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(url, consent, repository) {
+        bitmap = url?.let { repository.load(it, consent) }
     }
     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
         bitmap?.let { Image(it.asImageBitmap(), contentDescription = null,
