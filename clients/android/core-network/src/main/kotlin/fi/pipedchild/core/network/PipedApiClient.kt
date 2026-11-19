@@ -52,6 +52,7 @@ import java.io.Closeable
 import java.io.IOException
 import java.net.URLEncoder
 import java.nio.channels.UnresolvedAddressException
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -354,6 +355,8 @@ class PipedApiClient(
     private suspend fun errorFrom(response: HttpResponse): PipedError {
         val body = try {
             response.body<ApiErrorBody>()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             null
         }
@@ -394,6 +397,9 @@ class PipedApiClient(
         return try {
             response.body()
         } catch (e: PipedError) {
+            throw e
+        } catch (e: CancellationException) {
+            // cancellation must propagate, never surface as MalformedResponse
             throw e
         } catch (e: IOException) {
             throw PipedError.NetworkUnavailable

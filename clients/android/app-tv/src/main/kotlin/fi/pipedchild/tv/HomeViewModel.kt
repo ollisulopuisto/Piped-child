@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import fi.pipedchild.core.model.PipedError
 import fi.pipedchild.core.model.StreamItem
 import fi.pipedchild.core.network.PipedApiClient
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,11 +50,16 @@ class HomeViewModel(
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
+    private var refreshJob: Job? = null
+
     // No auto-load in init: the first-run consent screen (architecture §6)
     // must list every contacted endpoint BEFORE the first request, so the
     // activity calls refresh() only after consent is on file.
     fun refresh() {
-        viewModelScope.launch { loadOnce() }
+        // Latest-request-wins: cancel the in-flight load so a slow earlier
+        // response can never overwrite the result of a newer refresh.
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch { loadOnce() }
     }
 
     /** One load cycle, exposed as a suspend function so tests can await it
@@ -61,6 +68,9 @@ class HomeViewModel(
         _state.value = HomeUiState.Loading
         _state.value = try {
             HomeUiState.Content(client.trending(region))
+        } catch (e: CancellationException) {
+            // a canceled load must terminate, not surface a spurious error
+            throw e
         } catch (e: PipedError) {
             HomeUiState.Error(e.toTvMessage())
         } catch (e: Exception) {

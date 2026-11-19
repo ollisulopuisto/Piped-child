@@ -12,7 +12,16 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 
 class HomeViewModelTest {
 
@@ -97,5 +106,53 @@ class HomeViewModelTest {
         val c = PipedApiClient("https://pipedapi.example.com", InMemoryTokenStore(), engine)
         HomeViewModel(c)
         assertEquals(0, engine.requestHistory.size, "construction must not hit the network")
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a canceled load ends quietly instead of surfacing a spurious error`() = runTest {
+        // a destroyed screen cancels its in-flight request; that must not
+        // reach the UI as an error state
+        val engine = MockEngine { awaitCancellation() }
+        val vm = HomeViewModel(
+            PipedApiClient("https://pipedapi.example.com", InMemoryTokenStore(), engine),
+        )
+        val job = launch { vm.loadOnce() }
+        runCurrent()
+        job.cancel()
+        advanceUntilIdle()
+        assertIs<HomeUiState.Loading>(vm.state.value)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a newer refresh wins over a slower in-flight load`() = runTest {
+        // overlapping refresh: the stale first response must never
+        // overwrite the newer one
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var calls = 0
+            val engine = MockEngine {
+                calls += 1
+                if (calls == 1) {
+                    awaitCancellation()
+                } else {
+                    respond(trendingJson, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            }
+            val vm = HomeViewModel(
+                PipedApiClient("https://pipedapi.example.com", InMemoryTokenStore(), engine),
+            )
+            vm.refresh()
+            runCurrent()
+            vm.refresh()
+            advanceUntilIdle()
+            assertEquals(2, calls)
+            val s = vm.state.value
+            assertIs<HomeUiState.Content>(s)
+            assertEquals(listOf("First", "Second"), s.items.map { it.title })
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 }

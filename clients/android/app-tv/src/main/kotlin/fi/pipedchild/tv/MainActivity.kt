@@ -43,17 +43,18 @@ private const val PREFS = "piped_child_tv"
  *  screen. Bumping the suffix re-asks if the endpoint story changes. */
 private const val KEY_CONSENTED_INSTANCE = "consented_instance_v1"
 
-/** The first-run consent text (architecture §6): every endpoint the app
- *  will contact, listed BEFORE the first request. Piped proxies video,
- *  images and SponsorBlock/DeArrow through the instance, so the instance
- *  is the only host this app contacts. */
+/** The first-run consent text (architecture §6): the destinations the app
+ *  contacts, disclosed BEFORE the first request. Only the trending request
+ *  exists today, so the text claims exactly that and commits to re-asking
+ *  before any new destination (playback, thumbnails) is introduced. */
 fun consentText(instanceUrl: String): String =
-    "Piped Child contacts one Piped instance:\n" +
+    "Piped Child contacts this Piped instance:\n" +
         "$instanceUrl\n\n" +
-        "Videos, thumbnails and SponsorBlock data are proxied through it, " +
-        "so it sees this device's IP address. No analytics, no ads, " +
-        "no Google sign-in. A setting to change the instance lands in " +
-        "a later version."
+        "Right now the only request is the trending list. The instance " +
+        "sees this device's IP address. No analytics, no ads, " +
+        "no Google sign-in. Playback, thumbnails and a change-instance " +
+        "setting land in later versions; if they add any new destination, " +
+        "this screen asks again first."
 
 class HomeViewModelFactory(private val instanceUrl: String) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -75,7 +76,10 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 if (consented) {
                     LaunchedEffect(Unit) { viewModel.refresh() }
-                    HomeScreen(viewModel)
+                    // onVideoSelected is the seam for the playback PR: the
+                    // grid reports the selected watch URL, the playback
+                    // screen PR consumes it.
+                    HomeScreen(viewModel, onVideoSelected = { /* playback PR follows */ })
                 } else {
                     FirstRunScreen(instanceUrl = DEFAULT_INSTANCE, onContinue = {
                         getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -106,7 +110,7 @@ fun FirstRunScreen(instanceUrl: String, onContinue: () -> Unit) {
 }
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel) {
+fun HomeScreen(viewModel: HomeViewModel, onVideoSelected: (String) -> Unit = {}) {
     val state by viewModel.state.collectAsState()
     Box(modifier = Modifier.fillMaxSize().padding(24.dp)) {
         when (val s = state) {
@@ -120,13 +124,13 @@ fun HomeScreen(viewModel: HomeViewModel) {
                     Text("Try again", modifier = Modifier.padding(16.dp))
                 }
             }
-            is HomeUiState.Content -> TrendingGrid(s.items)
+            is HomeUiState.Content -> TrendingGrid(s.items, onVideoSelected)
         }
     }
 }
 
 @Composable
-private fun TrendingGrid(items: List<StreamItem>) {
+private fun TrendingGrid(items: List<StreamItem>, onVideoSelected: (String) -> Unit) {
     // standard compose lazy grid: on TV the focus system gives d-pad
     // navigation between focusable children out of the box
     LazyVerticalGrid(
@@ -136,9 +140,10 @@ private fun TrendingGrid(items: List<StreamItem>) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         items(items, key = { it.url }) { item ->
-            // d-pad focus works on TV through the clickable Card; click
-            // opens playback in the next M2 PR
-            Card(onClick = { /* playback PR follows */ }) {
+            // d-pad focus works on TV through the clickable Card; the
+            // selection callback is wired, the playback screen it drives
+            // lands in the next M2 PR
+            Card(onClick = { onVideoSelected(item.url) }) {
                 Column {
                     // thumbnail loading lands with the playback PR (coil);
                     // the card is title-first until then
