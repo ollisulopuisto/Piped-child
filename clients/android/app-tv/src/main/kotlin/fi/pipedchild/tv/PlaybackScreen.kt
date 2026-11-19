@@ -12,6 +12,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -65,7 +66,7 @@ private fun PlayerSurface(media: PlaybackMedia, onBack: () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var player by remember(media) { mutableStateOf<ExoPlayer?>(null) }
     var error by remember(media) { mutableStateOf<String?>(null) }
-    var position by remember(media) { mutableLongStateOf(0L) }
+    var position by remember(media) { mutableLongStateOf(C.TIME_UNSET) }
     var playWhenReady by remember(media) { mutableStateOf(true) }
 
     DisposableEffect(media, lifecycle) {
@@ -91,7 +92,9 @@ private fun PlayerSurface(media: PlaybackMedia, onBack: () -> Unit) {
                     }
                 })
                 created.setMediaSource(manager.mediaSourceFor(media.choice))
-                created.seekTo(position)
+                // TIME_UNSET preserves Media3's default live edge on a
+                // first start; a saved position resumes only after Stop.
+                if (position != C.TIME_UNSET) created.seekTo(position)
                 created.playWhenReady = playWhenReady
                 created.prepare()
             } catch (exception: Exception) {
