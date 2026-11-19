@@ -86,4 +86,16 @@ class HomeViewModelTest {
         assertTrue("https://pipedapi.example.com" in text)
         assertTrue("No analytics" in text)
     }
+
+    @Test
+    fun `no request leaves before an explicit load`() = runTest {
+        // the first-run consent gate (architecture §6) holds only if the
+        // ViewModel never fires a request on its own
+        val engine = MockEngine {
+            respond("[]", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }
+        val c = PipedApiClient("https://pipedapi.example.com", InMemoryTokenStore(), engine)
+        HomeViewModel(c)
+        assertEquals(0, engine.requestHistory.size, "construction must not hit the network")
+    }
 }

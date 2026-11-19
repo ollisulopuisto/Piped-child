@@ -48,11 +48,12 @@ private const val KEY_CONSENTED_INSTANCE = "consented_instance_v1"
  *  images and SponsorBlock/DeArrow through the instance, so the instance
  *  is the only host this app contacts. */
 fun consentText(instanceUrl: String): String =
-    "Piped Child contacts only the Piped instance you choose:\n" +
+    "Piped Child contacts one Piped instance:\n" +
         "$instanceUrl\n\n" +
         "Videos, thumbnails and SponsorBlock data are proxied through it, " +
         "so it sees this device's IP address. No analytics, no ads, " +
-        "no Google sign-in."
+        "no Google sign-in. A setting to change the instance lands in " +
+        "a later version."
 
 class HomeViewModelFactory(private val instanceUrl: String) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
