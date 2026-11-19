@@ -102,12 +102,10 @@ per-instance token boundaries and API URL handling. Add regression tests for
 confirmed gaps; source review alone is not a passing Swift result.
 
 After each owner merge, inspect the next PR's base and file diff. After the whole
-stack is merged, rerun model/network/player/optional-boundary/TV JVM tests,
+stack is merged, rerun model/network/player/TV JVM tests,
 `:app-tv:lintDebug` and `:app-tv:assembleDebug` on master. Repeat emulator and
 Chromecast smoke checks on that exact APK. Keep backend limits, confirmed bugs
 (with reproducible steps), and unverified hardware risks in separate sections.
 
-ChoreKeeper remains an isolated boundary. Its next scope must separately decide
-server URL/reachability, child identity/auth, credential storage, read-only test,
-endpoint consent, error behavior and integration tests. No spending, refunds,
-parent approval or playback enforcement follows from this acceptance procedure.
+The owner removed ChoreKeeper integration on 2026-11-19. It is not part of the
+client acceptance gates and the app contains no module or connection for it.
