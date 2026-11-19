@@ -38,6 +38,9 @@ android {
 dependencies {
     implementation(project(":core-model"))
     implementation(project(":core-network"))
+    implementation(project(":core-player"))
+    implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
 
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation("androidx.compose.ui:ui")
@@ -61,8 +64,13 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation(kotlin("test"))
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("org.robolectric:robolectric:4.12.2")
 }
 
 tasks.withType<org.gradle.api.tasks.testing.Test> {
     useJUnitPlatform()
+    maxHeapSize = "640m"
 }

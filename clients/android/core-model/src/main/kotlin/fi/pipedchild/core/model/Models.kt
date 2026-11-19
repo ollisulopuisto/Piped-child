@@ -191,7 +191,11 @@ data class StreamsResponse(
     val dash: String? = null,
     val hls: String? = null,
     val lbryId: String? = null,
-    val proxyPrefix: String? = null,
+    /** Base URL of the instance's media proxy (verified live against
+     *  pipedapi.ducks.party on 2026-11-19: field name is `proxyUrl`, a
+     *  separate host from the API, e.g. piped-proxy.ducks.party). Media
+     *  bytes flow through it, so it is a distinct consent destination. */
+    val proxyUrl: String? = null,
     val videoStreams: List<PipedStream> = emptyList(),
     val audioStreams: List<PipedStream> = emptyList(),
     val subtitles: List<Subtitle> = emptyList(),

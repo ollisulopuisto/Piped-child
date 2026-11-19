@@ -167,4 +167,12 @@ class FixtureContractTest {
             PlaybackSelector.select(r, PlaybackSelector.Platform.ANDROID)
         }
     }
+
+    @Test
+    fun `streams decodes the API proxyUrl field rather than silently discarding it`() {
+        val response = json.decodeFromString<StreamsResponse>(
+            """{"title":"Example","proxyUrl":"https://proxy.example.com"}""",
+        )
+        assertEquals("https://proxy.example.com", response.proxyUrl)
+    }
 }
