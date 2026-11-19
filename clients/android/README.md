@@ -22,16 +22,22 @@ This is a development APK, not a release-signed build. Installing or launching i
 ## Current flow
 
 1. Approve the API instance before the first request. This version defaults to `https://pipedapi.ducks.party`; instance settings are a later increment.
-2. Move around Trending with the remote. The focused card has a white border. Select a card to request its playback metadata.
+2. Optionally approve the listed HTTPS thumbnail image origin before any images load, or choose Titles only. New image origins are shown individually. Approval lasts for the home ViewModel session, not across app restarts; image cache is memory-only. Move around Trending with the remote. The focused card has a white border. Select a card to request its playback metadata.
 3. Approve the media proxy shown for that selection before any video bytes are loaded. Approval is per selection. Only HTTPS proxy origins are supported in this increment.
 4. Media3 supplies playback controls. Back returns to the selected card and its grid position. Leaving/backgrounding the player releases it; foregrounding resumes the in-session position.
 
 Media requests to undisclosed origins are blocked. The data source rewrites Google video URLs through the approved proxy, converts `/videoplayback` byte ranges to the Piped query format, and rejects HTTP redirects. Direct LBRY/CDN entries are excluded rather than silently contacting them. Some videos may therefore have no supported source even if the web frontend can play them.
 
-Thumbnails, instance selection, SponsorBlock playback integration, and the optional isolated ChoreKeeper module are not included yet.
+Instance selection, SponsorBlock playback integration, and the optional isolated ChoreKeeper module are not included yet.
 
 ## Verification boundaries
 
 `TvScreenRenderTest` uses Robolectric native graphics to render the real Compose layouts and generate screenshots under `app-tv/build/tv-screens/`. It sends directional and center key events through the grid, scrolls beyond the first visible rows, and checks selection and focus restoration after a Back dispatch. Other tests cover metadata cancellation, proxy approval, shared source selection, URL filtering and the Media3 byte-range bridge.
 
 These are JVM checks. They do not verify Android TV launcher behavior, physical remote behavior, hardware decoding, or end-to-end playback on a Chromecast. Run those on an Android TV emulator and a physical Chromecast with Google TV 4K before calling M2 hardware acceptance complete.
+
+### Thumbnail safety checks
+
+Thumbnail HTTP uses no cookies or credentials and does not follow redirects. Responses must be images and at most 2 MiB, including chunked bodies. Decoding rejects dimensions over 4096 in either direction and samples to at most 640 by 360; there are at most three in-flight loads and a 12 MiB memory cache. Malformed, blocked, oversized or failed images leave the title and placeholder usable. Session approval is checked before every cache hit as well as before fetching.
+
+Loopback HTTP tests verify redirect refusal, MIME checks, the chunked download limit, and absence of Cookie/Authorization headers. Native-graphics JVM tests check the optional consent gate, remote decline, zero fetches before approval, actual image rendering, caching and cancellation. These tests are not physical-TV or real-network image validation.

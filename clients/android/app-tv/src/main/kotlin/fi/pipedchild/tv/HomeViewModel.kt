@@ -51,6 +51,13 @@ class HomeViewModel(
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
     private var refreshJob: Job? = null
+    internal val thumbnailRepository = ThumbnailRepository()
+    private val _thumbnailConsent = MutableStateFlow(ThumbnailConsent())
+    internal val thumbnailConsent = _thumbnailConsent.asStateFlow()
+
+    internal fun decideThumbnails(origins: List<String>, allow: Boolean) {
+        _thumbnailConsent.value = _thumbnailConsent.value.decide(origins, allow)
+    }
 
     // No auto-load in init: the first-run consent screen (architecture §6)
     // must list every contacted endpoint BEFORE the first request, so the
