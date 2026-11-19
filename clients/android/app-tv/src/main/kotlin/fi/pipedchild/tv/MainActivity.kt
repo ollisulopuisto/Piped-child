@@ -67,8 +67,8 @@ fun consentText(instanceUrl: String): String =
         "$instanceUrl\n\n" +
         "It receives this device's IP address, trending and video metadata requests. " +
         "Before playing, the app separately asks you to approve the media proxy. " +
-        "No analytics, no ads, no Google sign-in. Thumbnails and instance settings " +
-        "are not available yet."
+        "No analytics, no ads, no Google sign-in. Thumbnail image origins are " +
+        "listed for separate approval before images load. Instance settings are not available yet."
 
 class HomeViewModelFactory(private val instanceUrl: String) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -142,13 +142,15 @@ fun FirstRunScreen(instanceUrl: String, onContinue: () -> Unit) {
 }
 
 @Composable
-fun HomeScreen(
+internal fun HomeScreen(
     viewModel: HomeViewModel,
     gridState: LazyGridState,
     lastSelected: String?,
+    repository: ThumbnailRepository = viewModel.thumbnailRepository,
     onVideoSelected: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
+    val imageConsent by viewModel.thumbnailConsent.collectAsState()
     Box(modifier = Modifier.fillMaxSize().padding(24.dp)) {
         when (val s = state) {
             is HomeUiState.Loading -> Text(
@@ -161,7 +163,21 @@ fun HomeScreen(
                     Text("Try again", modifier = Modifier.padding(16.dp))
                 }
             }
-            is HomeUiState.Content -> TrendingGrid(s.items, gridState, lastSelected, onVideoSelected)
+            is HomeUiState.Content -> {
+                val pending = imageConsent.pending(s.items.mapNotNull { it.thumbnail })
+                if (pending.isNotEmpty()) {
+                    // Show one complete origin at a time so a remote user
+                    // never approves undisplayed hosts below a scroll fold.
+                    ThumbnailConsentScreen(listOf(pending.first())) { allow ->
+                        viewModel.decideThumbnails(
+                            if (allow) listOf(pending.first()) else pending + imageConsent.approved, allow,
+                        )
+                    }
+                } else {
+                    TrendingGrid(s.items, gridState, lastSelected, imageConsent,
+                        repository, onVideoSelected)
+                }
+            }
         }
     }
 }
@@ -171,6 +187,8 @@ private fun TrendingGrid(
     items: List<StreamItem>,
     gridState: LazyGridState,
     lastSelected: String?,
+    imageConsent: ThumbnailConsent,
+    repository: ThumbnailRepository,
     onVideoSelected: (String) -> Unit,
 ) {
     val inputMode = LocalInputModeManager.current
@@ -220,8 +238,7 @@ private fun TrendingGrid(
                     .border(if (focused) 4.dp else 0.dp, if (focused) Color.White else Color.Transparent),
             ) {
                 Column {
-                    // Thumbnail loading is a separate increment.
-                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                    VideoThumbnail(item.thumbnail, imageConsent, repository)
                     Text(
                         item.title,
                         modifier = Modifier.padding(12.dp),

@@ -2,6 +2,9 @@ package fi.pipedchild.tv
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.activity.ComponentActivity
 import fi.pipedchild.core.player.PlaybackChoice
 import androidx.compose.material3.MaterialTheme
@@ -111,5 +114,71 @@ class TvScreenRenderTest {
         compose.onNodeWithText("Play").assertIsDisplayed()
         capture("proxy-consent")
         compose.onNodeWithText("Back").assertIsDisplayed()
+    }
+
+    @Test
+    fun `thumbnail consent can be declined with the remote`() {
+        var decision: Boolean? = null
+        compose.setContent { TvTheme {
+            ThumbnailConsentScreen(listOf("https://piped-proxy.ducks.party")) { decision = it }
+        } }
+        compose.onNodeWithText("Load thumbnails").assertIsFocused()
+        capture("thumbnail-consent")
+        compose.onNodeWithText("Load thumbnails").performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Titles only").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.runOnIdle { assertEquals(false, decision) }
+    }
+
+    @Test
+    fun `approved thumbnail renders actual image pixels and denied consent bypasses cache`() {
+        val source = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(source)
+        canvas.drawColor(android.graphics.Color.rgb(22, 70, 90))
+        val paint = android.graphics.Paint().apply { color = android.graphics.Color.rgb(255, 190, 65) }
+        canvas.drawCircle(320f, 180f, 95f, paint)
+        val bytes = java.io.ByteArrayOutputStream().also { source.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        source.recycle()
+        var calls = 0
+        val repo = ThumbnailRepository { calls++; bytes }
+        val consent = ThumbnailConsent().decide(listOf("https://images.example"), true)
+        compose.setContent { TvTheme {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().padding(48.dp)) {
+                VideoThumbnail("https://images.example/image.png", consent, repo)
+            }
+        } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("video-thumbnail", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        capture("thumbnail-loaded")
+        compose.runOnIdle { assertEquals(1, calls) }
+        runBlocking {
+            assertNull(repo.load("https://images.example/image.png", ThumbnailConsent()))
+            assertNotNull(repo.load("https://images.example/image.png", consent))
+        }
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun `home makes no thumbnail request until its own consent gate is accepted`() {
+        val bitmap = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.rgb(25, 80, 130))
+        val bytes = java.io.ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        bitmap.recycle()
+        var requests = 0
+        val repo = ThumbnailRepository { requests++; bytes }
+        val vm = HomeViewModel(PipedApiClient("https://api.example.com", InMemoryTokenStore(), MockEngine {
+            respond("""[{"url":"/watch?v=example","title":"Example video","thumbnail":"https://images.example/a.png"}]""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }))
+        runBlocking { vm.loadOnce() }
+        compose.setContent { TvTheme { HomeScreen(vm, rememberLazyGridState(), null, repo) {} } }
+        compose.onNodeWithText("Load thumbnails").assertIsDisplayed().assertIsFocused()
+        compose.runOnIdle { assertEquals(0, requests) }
+        compose.onNodeWithText("Load thumbnails").performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Example video").assertIsDisplayed()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("video-thumbnail", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Example video").assertIsDisplayed()
+        capture("thumbnail-in-grid")
+        compose.runOnIdle { assertEquals(1, requests) }
+        vm.shutdown()
     }
 }
