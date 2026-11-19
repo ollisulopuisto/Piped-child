@@ -19,3 +19,5 @@ include("core-model")
 include("core-network")
 include("core-player")
 include("app-tv")
+
+include(":feature:chorekeeper")

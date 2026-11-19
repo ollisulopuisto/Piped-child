@@ -28,7 +28,7 @@ This is a development APK, not a release-signed build. Installing or launching i
 
 Media requests to undisclosed origins are blocked. The data source rewrites Google video URLs through the approved proxy, converts `/videoplayback` byte ranges to the Piped query format, and rejects HTTP redirects. Direct LBRY/CDN entries are excluded rather than silently contacting them. Some videos may therefore have no supported source even if the web frontend can play them.
 
-SponsorBlock playback integration, and the optional isolated ChoreKeeper module are not included yet.
+SponsorBlock playback integration is not included yet. `feature/chorekeeper` contains an isolated, opt-in connection boundary only. It is not linked to the TV app and cannot contact a server, authenticate, spend minutes, or affect playback. See its README for remaining product decisions.
 
 ## Verification boundaries
 
