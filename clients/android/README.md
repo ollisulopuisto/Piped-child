@@ -21,14 +21,14 @@ This is a development APK, not a release-signed build. Installing or launching i
 
 ## Current flow
 
-1. Approve the API instance before the first request. This version defaults to `https://pipedapi.ducks.party`; instance settings are a later increment.
+1. Approve the API instance before the first request. This version defaults to `https://pipedapi.ducks.party`. Instance settings is available before approval and above the home grid.
 2. Optionally approve the listed HTTPS thumbnail image origin before any images load, or choose Titles only. New image origins are shown individually. Approval lasts for the home ViewModel session, not across app restarts; image cache is memory-only. Move around Trending with the remote. The focused card has a white border. Select a card to request its playback metadata.
 3. Approve the media proxy shown for that selection before any video bytes are loaded. Approval is per selection. Only HTTPS proxy origins are supported in this increment.
 4. Media3 supplies playback controls. Back returns to the selected card and its grid position. Leaving/backgrounding the player releases it; foregrounding resumes the in-session position.
 
 Media requests to undisclosed origins are blocked. The data source rewrites Google video URLs through the approved proxy, converts `/videoplayback` byte ranges to the Piped query format, and rejects HTTP redirects. Direct LBRY/CDN entries are excluded rather than silently contacting them. Some videos may therefore have no supported source even if the web frontend can play them.
 
-Instance selection, SponsorBlock playback integration, and the optional isolated ChoreKeeper module are not included yet.
+SponsorBlock playback integration, and the optional isolated ChoreKeeper module are not included yet.
 
 ## Verification boundaries
 
@@ -41,3 +41,9 @@ These are JVM checks. They do not verify Android TV launcher behavior, physical 
 Thumbnail HTTP uses no cookies or credentials and does not follow redirects. Responses must be images and at most 2 MiB, including chunked bodies. Decoding rejects dimensions over 4096 in either direction and samples to at most 640 by 360; there are at most three in-flight loads and a 12 MiB memory cache. Malformed, blocked, oversized or failed images leave the title and placeholder usable. Session approval is checked before every cache hit as well as before fetching.
 
 Loopback HTTP tests verify redirect refusal, MIME checks, the chunked download limit, and absence of Cookie/Authorization headers. Native-graphics JVM tests check the optional consent gate, remote decline, zero fetches before approval, actual image rendering, caching and cancellation. These tests are not physical-TV or real-network image validation.
+
+### Switching the API instance
+
+Open Instance settings before first-run approval or press Up from the grid's first row. Enter an HTTPS API host root, optionally with a port, then Save instance. The form does not probe the URL or claim it is healthy. A changed URL is saved locally, API approval is removed, and a fresh MainActivity session replaces the old clients, memory caches and image approvals. The new instance cannot receive requests until the first-run screen is accepted. Saving an equivalent normalized URL leaves the existing session unchanged. Cancel and invalid input leave the existing setting and approval unchanged.
+
+This TV settings increment supports HTTPS only, including private HTTPS hosts with valid certificates. It does not expose the networking module's private-network plaintext HTTP allowance, because the Android app does not yet have a verified per-domain cleartext configuration. No silent failover or token migration is performed.
