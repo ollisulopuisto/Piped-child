@@ -78,3 +78,20 @@ Construction makes no request. The helper does not choose a video, fetch media o
 images, follow redirects, retry, switch instances, or save results. It uses public
 reads without an account token and propagates caller cancellation. TV settings
 still only saves the URL; no diagnostic button has been added.
+
+### Video search
+
+After API approval, choose Search videos beside Instance settings. Typing makes
+no request. Press Down to focus Search, then center to submit, or use the keyboard's
+Search action. Queries go only to the approved API instance. This increment is
+video-only, with title/uploader results and explicit Load more. It does not request
+suggestions or images, save search history, or expose channel/playlist navigation.
+Results for the submitted query remain labeled even if the input is edited.
+
+Select a result with the remote to enter the existing playback metadata/proxy
+approval flow. Back from playback restores the result and list position. Back
+from search returns to Trending. Leaving search cancels its in-flight request,
+without turning cancellation into a server error. Page failures keep earlier
+results and the cursor for Retry next page. A failed initial search can be retried
+with Search. These flows have JVM-rendered remote-key tests, not physical-TV or
+on-screen-keyboard acceptance.

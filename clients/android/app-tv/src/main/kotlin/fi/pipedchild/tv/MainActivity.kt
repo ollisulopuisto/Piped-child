@@ -24,6 +24,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -61,7 +63,7 @@ import fi.pipedchild.core.network.PipedApiClient
 fun consentText(instanceUrl: String): String =
     "Piped Child contacts this Piped instance:\n" +
         "$instanceUrl\n\n" +
-        "It receives this device's IP address, trending and video metadata requests. " +
+        "It receives this device's IP address, trending, submitted search queries and video metadata requests. " +
         "Before playing, the app separately asks you to approve the media proxy. " +
         "No analytics, no ads, no Google sign-in. Thumbnail image origins are " +
         "listed for separate approval before images load. Settings lets you change the API instance."
@@ -92,6 +94,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val searchModel: SearchViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                SearchViewModel(PipedApiClient(instanceUrl)) as T
+        }
+    }
+
     private var consented by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,6 +112,8 @@ class MainActivity : ComponentActivity() {
             TvTheme {
                 var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
                 var lastSelected by rememberSaveable { mutableStateOf<String?>(null) }
+                var searching by rememberSaveable { mutableStateOf(false) }
+                val searchState = rememberSaveableStateHolder()
                 val gridState = rememberLazyGridState()
                 val headerFocus = remember { FocusRequester() }
                 if (consented) {
@@ -110,13 +122,23 @@ class MainActivity : ComponentActivity() {
                 val playing = selectedId
                 if (playing != null && consented) {
                     PlaybackScreen(playing, playbackModel, onBack = { selectedId = null })
+                } else if (searching && consented) {
+                    searchState.SaveableStateProvider("search") {
+                        SearchScreen(searchModel, onBack = { searching = false }, onVideoSelected = { url ->
+                            videoIdFromWatchUrl(url)?.let { selectedId = it }
+                        })
+                    }
                 } else {
                     Column(Modifier.fillMaxSize()) {
+                        Row {
                         Button(
                             onClick = { settings.launch(Intent(this@MainActivity, InstanceSettingsActivity::class.java)) },
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                                 .focusRequester(headerFocus).then(remoteFocus()),
                         ) { Text("Instance settings") }
+                        if (consented) Button(onClick = { searching = true },
+                            modifier = Modifier.padding(vertical = 8.dp).then(remoteFocus())) { Text("Search videos") }
+                        }
                         Box(Modifier.weight(1f)) {
                             if (consented) {
                                 HomeScreen(viewModel, gridState, lastSelected,
