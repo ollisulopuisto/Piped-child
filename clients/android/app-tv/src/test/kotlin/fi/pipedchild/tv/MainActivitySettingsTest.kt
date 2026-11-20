@@ -75,9 +75,11 @@ class MainActivitySettingsTest {
 
     @Test fun `recreation before consent stays gated and restores remote focus`() {
         compose.onNodeWithText("Continue").assertIsFocused()
+        compose.onNodeWithText("Search videos").assertDoesNotExist()
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
         compose.onNodeWithText("Continue").assertIsDisplayed().assertIsFocused()
+        compose.onNodeWithText("Search videos").assertDoesNotExist()
         compose.onNodeWithText("Instance settings").assertIsDisplayed()
         compose.runOnIdle {
             assertNull(compose.activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
