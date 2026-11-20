@@ -38,6 +38,38 @@ public struct PipedStream: Codable, Equatable {
     public let audioTrackType: String?
     public let contentLength: Int64
 
+    // Initializer defaults are not applied by synthesized Decodable. Default
+    // only absent keys; explicit null/wrong types for required values still fail.
+    private enum CodingKeys: String, CodingKey {
+        case url, format, quality, codec, mimeType, itag, bitrate, width, height, fps
+        case videoOnly, initStart, initEnd, indexStart, indexEnd, audioTrackId
+        case audioTrackLocale, audioTrackName, audioTrackType, contentLength
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        url = try values.decode(String.self, forKey: .url)
+        format = try values.decodeIfPresent(String.self, forKey: .format)
+        quality = try values.decodeIfPresent(String.self, forKey: .quality)
+        codec = try values.decodeIfPresent(String.self, forKey: .codec)
+        mimeType = try values.decodeIfPresent(String.self, forKey: .mimeType)
+        itag = try values.decodeIfPresent(Int.self, forKey: .itag)
+        bitrate = try values.contains(.bitrate) ? values.decode(Int64.self, forKey: .bitrate) : 0
+        width = try values.contains(.width) ? values.decode(Int.self, forKey: .width) : 0
+        height = try values.contains(.height) ? values.decode(Int.self, forKey: .height) : 0
+        fps = try values.contains(.fps) ? values.decode(Int.self, forKey: .fps) : 0
+        videoOnly = try values.contains(.videoOnly) ? values.decode(Bool.self, forKey: .videoOnly) : false
+        initStart = try values.contains(.initStart) ? values.decode(Int64.self, forKey: .initStart) : 0
+        initEnd = try values.contains(.initEnd) ? values.decode(Int64.self, forKey: .initEnd) : 0
+        indexStart = try values.contains(.indexStart) ? values.decode(Int64.self, forKey: .indexStart) : 0
+        indexEnd = try values.contains(.indexEnd) ? values.decode(Int64.self, forKey: .indexEnd) : 0
+        audioTrackId = try values.decodeIfPresent(String.self, forKey: .audioTrackId)
+        audioTrackLocale = try values.decodeIfPresent(String.self, forKey: .audioTrackLocale)
+        audioTrackName = try values.decodeIfPresent(String.self, forKey: .audioTrackName)
+        audioTrackType = try values.decodeIfPresent(String.self, forKey: .audioTrackType)
+        contentLength = try values.contains(.contentLength) ? values.decode(Int64.self, forKey: .contentLength) : 0
+    }
+
     public init(url: String, format: String? = nil, quality: String? = nil,
                 codec: String? = nil, mimeType: String? = nil, itag: Int? = nil,
                 bitrate: Int64 = 0, width: Int = 0, height: Int = 0, fps: Int = 0,
@@ -67,6 +99,22 @@ public struct StreamsResponse: Codable, Equatable {
     public let lbryId: String?
     public let videoStreams: [PipedStream]
     public let audioStreams: [PipedStream]
+
+    private enum CodingKeys: String, CodingKey {
+        case title, duration, livestream, dash, hls, lbryId, videoStreams, audioStreams
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        title = try values.decodeIfPresent(String.self, forKey: .title)
+        duration = try values.contains(.duration) ? values.decode(Int64.self, forKey: .duration) : 0
+        livestream = try values.contains(.livestream) ? values.decode(Bool.self, forKey: .livestream) : false
+        dash = try values.decodeIfPresent(String.self, forKey: .dash)
+        hls = try values.decodeIfPresent(String.self, forKey: .hls)
+        lbryId = try values.decodeIfPresent(String.self, forKey: .lbryId)
+        videoStreams = try values.contains(.videoStreams) ? values.decode([PipedStream].self, forKey: .videoStreams) : []
+        audioStreams = try values.contains(.audioStreams) ? values.decode([PipedStream].self, forKey: .audioStreams) : []
+    }
 
     public init(title: String? = nil, duration: Int64 = 0, livestream: Bool = false,
                 dash: String? = nil, hls: String? = nil, lbryId: String? = nil,
